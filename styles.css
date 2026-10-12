@@ -37,11 +37,6 @@
            border: none removes the default outline. cursor: pointer shows a hand when hovering. */
         button { padding: 10px 20px; background: darkblue; color: white; border: none; cursor: pointer; }
  
-        /* White cards used for matches, replies, and messages from the server.
-           border-radius = how rounded the corners are (0 = square).
-           margin-top = space above each card. */
-        .card { background: white; padding: 12px; margin-top: 12px; border-radius: 6px; }
- 
         /* The "Chat" button inside a card. Same dark blue as Submit so the site feels consistent.
            display: inline-block lets it have padding but stay only as wide as its text. */
         .card a { display: inline-block; margin-top: 8px; padding: 6px 14px; background: darkblue; color: white; text-decoration: none; }
@@ -95,3 +90,5 @@
 
         /* The Send button. Same dark blue as the other pages so the site feels consistent. */
         button { padding: 10px 20px; background: darkblue; color: white; border: none; cursor: pointer; }
+
+        
