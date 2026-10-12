@@ -48,3 +48,50 @@
  
         /* Small gray text, like "33% similar". Change font-size for bigger or smaller. */
         .small { font-size: 13px; color: #444; }
+
+
+        /* Each choice is a white card that is also a link. padding = space inside, border = dark blue outline */
+        .card { display: block; background: white; color: darkblue; text-decoration: none; padding: 20px; margin-bottom: 14px; border: 2px solid darkblue; border-radius: 8px; text-align: left; }
+
+        /* Card title: big and bold so visitors can scan the choices quickly */
+        .card strong { display: block; font-size: 20px; }
+
+        /* Small gray description under each title. Keep it to one short line */
+        .card span { display: block; font-size: 14px; color: #444; margin-top: 4px; }
+
+        /* Hover effect: card turns light blue when the mouse is over it, so visitors know it's clickable */
+        .card:hover { background: #eaf4fb; }
+
+        /* The line under the heading showing what the two questions are about.
+           font-size = text size. color = gray. margin-bottom = space below it. */
+        #topic { font-size: 14px; color: #444; margin-bottom: 12px; }
+
+        /* The white box where messages appear.
+           height = how tall it is (raise it for a taller chat).
+           overflow-y: auto = adds a scrollbar when messages don't fit.
+           border-radius = rounded corners. padding = space inside the box. */
+        #messages { background: white; border-radius: 6px; height: 360px; overflow-y: auto; padding: 12px; }
+
+        /* One message bubble (applies to every message).
+           max-width: 75% = a bubble never gets wider than 3/4 of the box, so long messages wrap.
+           padding = space around the text inside the bubble. margin-bottom = space between bubbles.
+           border-radius: 12px = rounded bubble (bigger number = rounder).
+           word-wrap makes very long words break instead of overflowing. */
+        .msg { max-width: 75%; padding: 8px 12px; margin-bottom: 8px; border-radius: 12px; word-wrap: break-word; }
+
+        /* YOUR messages: dark blue with white text, pushed to the right.
+           margin-left: auto is what pushes it right. Change the colors to restyle your bubbles. */
+        .mine { background: darkblue; color: white; margin-left: auto; }
+
+        /* THEIR messages: light blue with dark text, on the left (the default side). */
+        .theirs { background: #d6eaf8; color: #222; }
+
+        /* The row holding the typing box and Send button.
+           display: flex puts them on one line. gap = space between them. margin-top = space above. */
+        #sendRow { display: flex; gap: 8px; margin-top: 12px; }
+
+        /* The text box where you type. flex: 1 = it takes all the leftover width. */
+        #text { flex: 1; padding: 10px; box-sizing: border-box; }
+
+        /* The Send button. Same dark blue as the other pages so the site feels consistent. */
+        button { padding: 10px 20px; background: darkblue; color: white; border: none; cursor: pointer; }
