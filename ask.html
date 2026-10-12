@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<!-- Tells the browser this is a modern HTML page. Always the first line. -->
+<html lang="en">
+<!-- lang="en" = the page is in English. Change it (like "es") if you switch languages. -->
+<head>
+    <!-- HEAD = setup info that visitors don't see directly. -->
+ 
+    <!-- Lets letters like é and symbols display correctly. Leave this alone. -->
+    <meta charset="UTF-8">
+ 
+    <!-- Makes the page fit phone screens instead of looking zoomed out. Leave this alone. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+ 
+    <!-- The text on the browser tab. CHANGE: edit the word between the tags. -->
+    <title>Ask</title>
+ 
+    <style>
+        /* STYLE = all the looks. Each rule is: what-you-style { property: value; } */
+ 
+        /* The whole page.
+           font-family = the font. Try Georgia or Verdana.
+           background = page color. Try #eaf4fb (lighter) or #aed6f1 (stronger).
+           max-width = how wide the column gets. Raise it for a wider page.
+           margin: 40px auto = 40px of space on top, and "auto" centers the column.
+           padding: 0 16px = space on the left and right so text never touches a phone's edge. */
+        body { font-family: Arial, sans-serif; background: #d6eaf8; max-width: 600px; margin: 40px auto; padding: 0 16px; }
+ 
+        /* The big heading. Change the color name, or use a hex like #ff6600.
+           Keep it dark so it stays readable on the light blue. */
+        h1 { color: darkblue; }
+ 
+        /* One row = a label and its box side by side.
+           display: flex puts items on one line.
+           align-items: flex-start lines them up at the top.
+           gap = space between the label and the box.
+           margin-bottom = space under each row. */
+        .row { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 16px; }
+ 
+        /* The typing boxes inside a row.
+           flex: 1 = fill all the leftover width.
+           padding = space between the box edge and the text you type (bigger = roomier).
+           box-sizing keeps the padding from making the box too wide. */
+        .row input, .row textarea { flex: 1; padding: 8px; box-sizing: border-box; }
+ 
+        /* Height of the big description box. Raise it for a taller box. */
+        textarea { height: 100px; }
+ 
+        /* The words "Question:" and "Description:".
+           font-weight: bold = thick text (use normal for thin).
+           width: 110px = keeps both boxes lined up. Raise it if a label wraps onto two lines.
+           padding-top = pushes the label down so it lines up with the box text. */
+        label { font-weight: bold; width: 110px; padding-top: 8px; }
+ 
+        /* The Submit button.
+           background = button color. color = text color. Keep them contrasting so it's readable.
+           border: none removes the default outline. cursor: pointer shows a hand when hovering. */
+        button { padding: 10px 20px; background: darkblue; color: white; border: none; cursor: pointer; }
+ 
+        /* White cards used for matches, replies, and messages from the server.
+           border-radius = how rounded the corners are (0 = square).
+           margin-top = space above each card. */
+        .card { background: white; padding: 12px; margin-top: 12px; border-radius: 6px; }
+ 
+        /* The "Chat" button inside a card. Same dark blue as Submit so the site feels consistent.
+           display: inline-block lets it have padding but stay only as wide as its text. */
+        .card a { display: inline-block; margin-top: 8px; padding: 6px 14px; background: darkblue; color: white; text-decoration: none; }
+ 
+        /* Small gray text, like "33% similar". Change font-size for bigger or smaller. */
+        .small { font-size: 13px; color: #444; }
+    </style>
+</head>
+<body>
+    <!-- BODY = everything visitors see, top to bottom. -->
+ 
+    <!-- The big heading. CHANGE: edit the text between the tags. -->
+    <h1>Ask a Question</h1>
+ 
+    <!-- An empty spot for "New reply" cards. The script at the bottom fills it in if someone replied.
+         id="inbox" is its name so the script can find it. -->
+    <div id="inbox"></div>
+ 
+    <!-- The form. id="askForm" is its name so the script can find it. -->
+    <form id="askForm">
+ 
+        <!-- Row 1: the Question box. -->
+        <div class="row">
+            <!-- for="question" connects the label to the box, so clicking the word focuses the box. -->
+            <label for="question">Question:</label>
+            <!-- type="text" = one line. maxlength="200" = most characters allowed (match MAX_QUESTION in server.py).
+                 required = the browser blocks Submit if this is empty. -->
+            <input type="text" id="question" maxlength="200" required>
+        </div>
+ 
+        <!-- Row 2: the Description box (optional). -->
+        <div class="row">
+            <label for="description">Description:</label>
+            <!-- textarea = a multi-line box. maxlength should match MAX_DESCRIPTION in server.py.
+                 CHANGE: add a "required" before the ">" to make this box mandatory too. -->
+            <textarea id="description" maxlength="1000"></textarea>
+        </div>
+ 
+        <!-- The Submit button. type="submit" makes it send the form. CHANGE: edit the word "Submit". -->
+        <button type="submit">Submit</button>
+    </form>
+ 
+    <!-- An empty spot where matches (or the "saved" message) appear after Submit. -->
+    <div id="result"></div>
+ 
+    <!-- A link to the home page. href must match the file name exactly. -->
+    <p><a href="index.html">Back to Home</a></p>
+ 
+    <script>
+        /* SCRIPT = what the page DOES. Everything below runs in the visitor's browser. */
+ 
+        /* Gives each browser a random ID and remembers it, so the server knows who is who.
+           It is NOT a login: clearing browser data creates a new ID. */
+        function getUserId() {
+            /* localStorage = a small notebook the browser keeps for this site. */
+            var id = localStorage.getItem("userId");
+            /* If there's no ID saved yet, make one from random letters/numbers plus the current time. */
+            if (!id) {
+                id = Math.random().toString(36).slice(2) + Date.now().toString(36);
+                localStorage.setItem("userId", id);
+            }
+            return id;
+        }
+ 
+        /* Builds one white card.
+           title = bold top line. text = paragraph under it (can be empty).
+           note = small gray line (can be empty). chatRoom = if given, adds a Chat button.
+           CHANGE: edit the pieces below to change how every card looks or what it says. */
+        function makeCard(title, text, note, chatRoom) {
+            var card = document.createElement("div");   /* Make an empty box. */
+            card.className = "card";                    /* Give it the white card style from above. */
+ 
+            /* Bold title. textContent (instead of innerHTML) treats everything as plain text, so a
+               stranger can't sneak code into the page through their question. Keep it this way. */
+            var strong = document.createElement("strong");
+            strong.textContent = title;
+            card.appendChild(strong);
+ 
+            /* Paragraph, only if there's text. */
+            if (text) {
+                var p = document.createElement("p");
+                p.textContent = text;
+                card.appendChild(p);
+            }
+            /* Small gray note, only if there is one. */
+            if (note) {
+                var small = document.createElement("div");
+                small.className = "small";
+                small.textContent = note;
+                card.appendChild(small);
+            }
+            /* Chat button, only if a room was given. It links to chat.html?room=3-7 */
+            if (chatRoom) {
+                var link = document.createElement("a");
+                link.href = "chat.html?room=" + chatRoom;
+                link.textContent = "Chat";   /* CHANGE: the button's wording. */
+                card.appendChild(link);
+            }
+            return card;
+        }
+ 
+        /* WHEN THE PAGE LOADS: ask the server if anyone replied to this browser's questions. */
+        fetch("/api/inbox?user_id=" + encodeURIComponent(getUserId()))
+            .then(function (r) { return r.json(); })      /* Turn the server's answer into a list. */
+            .then(function (rooms) {
+                var box = document.getElementById("inbox");
+                /* Make a "New reply" card for each waiting chat. CHANGE: the wording in quotes. */
+                rooms.forEach(function (r) {
+                    box.appendChild(makeCard("New reply", r.text, "Someone answered. Open the chat to reply.", r.room));
+                });
+            })
+            .catch(function () { /* If the server can't be reached, quietly skip the inbox. */ });
+ 
+        /* WHEN SOMEONE CLICKS SUBMIT: */
+        document.getElementById("askForm").addEventListener("submit", function (event) {
+            /* Stops the browser from reloading the page, which would erase what they typed. */
+            event.preventDefault();
+ 
+            /* Send the question to the server. */
+            fetch("/api/questions", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    user_id: getUserId(),                                    /* Who is asking. */
+                    question: document.getElementById("question").value,    /* What they typed in the question box. */
+                    description: document.getElementById("description").value  /* What they typed in the description box. */
+                })
+            })
+            .then(function (r) {
+                /* If the server refused (error), jump to the error message at the bottom. */
+                if (!r.ok) { throw new Error("Server said no"); }
+                return r.json();
+            })
+            .then(function (data) {
+                var box = document.getElementById("result");
+                box.innerHTML = "";   /* Clear any old results first. */
+ 
+                /* No matches: tell them it's saved. CHANGE: the wording in quotes. */
+                if (data.matches.length === 0) {
+                    box.appendChild(makeCard("Question saved", "", "No similar questions yet. Check back later for replies."));
+                    return;
+                }
+ 
+                /* Matches found: show a heading card, then one card per match. */
+                box.appendChild(makeCard("People with similar questions", "", ""));
+                data.matches.forEach(function (m) {
+                    /* The room name is both question ids, smaller first, like "3-7".
+                       Both people must end up with the SAME name, which is why it's sorted. */
+                    var room = Math.min(data.id, m.id) + "-" + Math.max(data.id, m.id);
+                    var pct = Math.round(m.score * 100) + "% similar";   /* 0.33 becomes "33% similar". */
+                    box.appendChild(makeCard(m.question, m.description, pct, room));
+                });
+            })
+            .catch(function () {
+                /* Shown if the server is off or unreachable. CHANGE: the wording in quotes. */
+                var box = document.getElementById("result");
+                box.innerHTML = "";
+                box.appendChild(makeCard("Couldn't reach the server", "", "Make sure server.py is running, then try again."));
+            });
+        });
+    </script>
+</body>
+</html>
+ 

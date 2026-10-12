@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <!-- Makes the page fit phone screens; leave this line alone -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Text shown on the browser tab -->
+    <title>Welcome</title>
+
+    <style>
+        /* Page font, light blue background, centered 600px column, and centered text */
+        body { font-family: Arial, sans-serif; background: #d6eaf8; max-width: 600px; margin: 40px auto; text-align: center; }
+
+        /* Heading color. Keep it dark so it stays readable on light blue */
+        h1 { color: darkblue; }
+
+        /* Each choice is a white card that is also a link. padding = space inside, border = dark blue outline */
+        .card { display: block; background: white; color: darkblue; text-decoration: none; padding: 20px; margin-bottom: 14px; border: 2px solid darkblue; border-radius: 8px; text-align: left; }
+
+        /* Card title: big and bold so visitors can scan the choices quickly */
+        .card strong { display: block; font-size: 20px; }
+
+        /* Small gray description under each title. Keep it to one short line */
+        .card span { display: block; font-size: 14px; color: #444; margin-top: 4px; }
+
+        /* Hover effect: card turns light blue when the mouse is over it, so visitors know it's clickable */
+        .card:hover { background: #eaf4fb; }
+    </style>
+</head>
+<body>
+    <!-- Big heading and the question that tells visitors what to do -->
+    <h1>Welcome</h1>
+    <p>What would you like to do?</p>
+
+    <!-- Card 1: the public question form. Opens ask.html -->
+    <a class="card" href="ask.html">
+        <strong>Ask a question</strong>
+        <span>Send in a question with a description.</span>
+    </a>
+
+    <!-- Card 2: opens ask-mykai.html, which must exist in this folder or visitors get a 404 -->
+    <a class="card" href="ask-mykai.html">
+        <strong>Ask Mykai</strong>
+        <span>Send Mykai a message directly.</span>
+    </a>
+
+    <!-- Card 3: opens about.html, which must also exist or visitors get a 404 -->
+    <a class="card" href="about.html">
+        <strong>About</strong>
+        <span>Learn what this site is for.</span>
+    </a>
+</body>
+</html>

@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<!-- Tells the browser this is a modern HTML page. Always the first line. -->
+<html lang="en">
+<head>
+    <!-- HEAD = setup info that visitors don't see directly. -->
+
+    <!-- Lets letters like é and symbols display correctly. Leave this alone. -->
+    <meta charset="UTF-8">
+
+    <!-- Makes the page fit phone screens. Leave this alone. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!-- The text on the browser tab. CHANGE: edit the word between the tags. -->
+    <title>Chat</title>
+
+    <style>
+        /* STYLE = all the looks. Each rule is: what-you-style { property: value; } */
+
+        /* The whole page: font, light blue background, centered 600px column.
+           CHANGE: use the same background color as your other pages so the site matches. */
+        body { font-family: Arial, sans-serif; background: #d6eaf8; max-width: 600px; margin: 40px auto; padding: 0 16px; }
+
+        /* The big heading. Keep it dark so it stays readable on light blue. */
+        h1 { color: darkblue; }
+
+        /* The line under the heading showing what the two questions are about.
+           font-size = text size. color = gray. margin-bottom = space below it. */
+        #topic { font-size: 14px; color: #444; margin-bottom: 12px; }
+
+        /* The white box where messages appear.
+           height = how tall it is (raise it for a taller chat).
+           overflow-y: auto = adds a scrollbar when messages don't fit.
+           border-radius = rounded corners. padding = space inside the box. */
+        #messages { background: white; border-radius: 6px; height: 360px; overflow-y: auto; padding: 12px; }
+
+        /* One message bubble (applies to every message).
+           max-width: 75% = a bubble never gets wider than 3/4 of the box, so long messages wrap.
+           padding = space around the text inside the bubble. margin-bottom = space between bubbles.
+           border-radius: 12px = rounded bubble (bigger number = rounder).
+           word-wrap makes very long words break instead of overflowing. */
+        .msg { max-width: 75%; padding: 8px 12px; margin-bottom: 8px; border-radius: 12px; word-wrap: break-word; }
+
+        /* YOUR messages: dark blue with white text, pushed to the right.
+           margin-left: auto is what pushes it right. Change the colors to restyle your bubbles. */
+        .mine { background: darkblue; color: white; margin-left: auto; }
+
+        /* THEIR messages: light blue with dark text, on the left (the default side). */
+        .theirs { background: #d6eaf8; color: #222; }
+
+        /* The row holding the typing box and Send button.
+           display: flex puts them on one line. gap = space between them. margin-top = space above. */
+        #sendRow { display: flex; gap: 8px; margin-top: 12px; }
+
+        /* The text box where you type. flex: 1 = it takes all the leftover width. */
+        #text { flex: 1; padding: 10px; box-sizing: border-box; }
+
+        /* The Send button. Same dark blue as the other pages so the site feels consistent. */
+        button { padding: 10px 20px; background: darkblue; color: white; border: none; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <!-- BODY = everything visitors see, top to bottom. -->
+
+    <!-- The big heading. CHANGE: edit the text between the tags. -->
+    <h1>Chat</h1>
+
+    <!-- Empty spot. The script fills it with "About: [question] | [question]". -->
+    <div id="topic"></div>
+
+    <!-- Empty white box. The script adds a bubble here for each message. -->
+    <div id="messages"></div>
+
+    <!-- The typing row. It's a form so pressing Enter sends the message too. -->
+    <form id="sendRow">
+        <!-- maxlength="500" = most characters in one message (match MAX_MESSAGE in server.py).
+             placeholder = the gray hint text. CHANGE: edit it.
+             autocomplete="off" stops the browser from suggesting old messages. -->
+        <input type="text" id="text" maxlength="500" placeholder="Type a message" autocomplete="off">
+        <button type="submit">Send</button>
+    </form>
+
+    <!-- A link to the home page. href must match the file name exactly. -->
+    <p><a href="index.html">Back to Home</a></p>
+
+    <script>
+        /* SCRIPT = what the page DOES. Everything below runs in the visitor's browser. */
+
+        /* Your browser's random ID, saved earlier by ask.html. The page compares it to each
+           message's sender to decide which bubbles are yours. */
+        var userId = localStorage.getItem("userId") || "";
+
+        /* The room name comes from the page address. For chat.html?room=3-7, this becomes "3-7". */
+        var room = new URLSearchParams(location.search).get("room") || "";
+
+        /* A shortcut to the white message box, so we don't have to look it up every time. */
+        var messages = document.getElementById("messages");
+
+        /* Adds one bubble to the message box. m has a user_id (who sent it) and text (what they said). */
+        function addMessage(m) {
+            var div = document.createElement("div");   /* Make an empty bubble. */
+            /* Give it the "msg" look, plus "mine" (right, dark blue) or "theirs" (left, light blue). */
+            div.className = "msg " + (m.user_id === userId ? "mine" : "theirs");
+            /* textContent shows the message as plain text, so a stranger can't run code through chat.
+               Keep it this way. */
+            div.textContent = m.text;
+            messages.appendChild(div);
+            /* Scroll to the bottom so the newest message is visible. */
+            messages.scrollTop = messages.scrollHeight;
+        }
+
+        /* Ask the server for the two questions this chat is about and show them under the heading. */
+        fetch("/api/room/" + room)
+            .then(function (r) { return r.json(); })
+            .then(function (info) {
+                /* CHANGE: "About: " is the label, and "  |  " is the separator between the two questions. */
+                document.getElementById("topic").textContent = "About: " + info.questions.join("  |  ");
+            })
+            .catch(function () {});   /* If it fails, just leave the line empty. */
+
+        /* Open the live connection to the chat room.
+           "ws://" is for normal http sites. "wss://" is used automatically if the site is https. */
+        var protocol = location.protocol === "https:" ? "wss://" : "ws://";
+        var socket = new WebSocket(protocol + location.host + "/ws/" + room);
+
+        /* Runs every time the server sends a message: first the saved history, then new messages live. */
+        socket.onmessage = function (event) {
+            addMessage(JSON.parse(event.data));
+        };
+
+        /* Runs if the connection drops (server stopped, Wi-Fi lost). Shows a notice instead of failing silently.
+           CHANGE: the wording in quotes. */
+        socket.onclose = function () {
+            var note = document.createElement("div");
+            note.className = "msg theirs";
+            note.textContent = "Disconnected. Refresh the page to reconnect.";
+            messages.appendChild(note);
+        };
+
+        /* WHEN SOMEONE PRESSES SEND (or Enter): */
+        document.getElementById("sendRow").addEventListener("submit", function (event) {
+            /* Stops the page from reloading. */
+            event.preventDefault();
+            var box = document.getElementById("text");
+            /* Do nothing if the box is empty, or if the connection isn't open yet (1 = open). */
+            if (!box.value.trim() || socket.readyState !== 1) { return; }
+            /* Send who you are and what you typed to the server. */
+            socket.send(JSON.stringify({ user_id: userId, text: box.value }));
+            /* Clear the box so you can type the next message. */
+            box.value = "";
+        });
+    </script>
+</body>
+</html>
