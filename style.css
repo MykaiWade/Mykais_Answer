@@ -1,0 +1,50 @@
+/* The whole page.
+           font-family = the font. Try Georgia or Verdana.
+           background = page color. Try #eaf4fb (lighter) or #aed6f1 (stronger).
+           max-width = how wide the column gets. Raise it for a wider page.
+           margin: 40px auto = 40px of space on top, and "auto" centers the column.
+           padding: 0 16px = space on the left and right so text never touches a phone's edge. */
+        body { font-family: Arial, sans-serif; background: #d6eaf8; max-width: 600px; margin: 40px auto; padding: 0 16px; }
+ 
+        /* The big heading. Change the color name, or use a hex like #ff6600.
+           Keep it dark so it stays readable on the light blue. */
+        h1 { color: darkblue; }
+ 
+        /* One row = a label and its box side by side.
+           display: flex puts items on one line.
+           align-items: flex-start lines them up at the top.
+           gap = space between the label and the box.
+           margin-bottom = space under each row. */
+        .row { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 16px; }
+ 
+        /* The typing boxes inside a row.
+           flex: 1 = fill all the leftover width.
+           padding = space between the box edge and the text you type (bigger = roomier).
+           box-sizing keeps the padding from making the box too wide. */
+        .row input, .row textarea { flex: 1; padding: 8px; box-sizing: border-box; }
+ 
+        /* Height of the big description box. Raise it for a taller box. */
+        textarea { height: 100px; }
+ 
+        /* The words "Question:" and "Description:".
+           font-weight: bold = thick text (use normal for thin).
+           width: 110px = keeps both boxes lined up. Raise it if a label wraps onto two lines.
+           padding-top = pushes the label down so it lines up with the box text. */
+        label { font-weight: bold; width: 110px; padding-top: 8px; }
+ 
+        /* The Submit button.
+           background = button color. color = text color. Keep them contrasting so it's readable.
+           border: none removes the default outline. cursor: pointer shows a hand when hovering. */
+        button { padding: 10px 20px; background: darkblue; color: white; border: none; cursor: pointer; }
+ 
+        /* White cards used for matches, replies, and messages from the server.
+           border-radius = how rounded the corners are (0 = square).
+           margin-top = space above each card. */
+        .card { background: white; padding: 12px; margin-top: 12px; border-radius: 6px; }
+ 
+        /* The "Chat" button inside a card. Same dark blue as Submit so the site feels consistent.
+           display: inline-block lets it have padding but stay only as wide as its text. */
+        .card a { display: inline-block; margin-top: 8px; padding: 6px 14px; background: darkblue; color: white; text-decoration: none; }
+ 
+        /* Small gray text, like "33% similar". Change font-size for bigger or smaller. */
+        .small { font-size: 13px; color: #444; }
