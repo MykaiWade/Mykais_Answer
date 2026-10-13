@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1"> <!-- makes the page fit phone screens -->
+  <title>Camera and mic test</title>
+  <link rel="stylesheet" href="styles.css"> <!-- reuses your site's colors and fonts -->
+  <style>
+    video { width: 100%; max-width: 460px; border-radius: 12px; background: #000; } /* video box: fills the width up to 460px, black while the camera is off */
+    #bar { max-width: 460px; height: 8px; border-radius: 4px; background: #ddd; margin: 12px 0; } /* grey track behind the mic level */
+    #level { height: 100%; width: 0; border-radius: 4px; background: #2563eb; } /* blue fill that grows with your voice */
+  </style>
+</head>
+<body>
+  <h1>Camera and mic test</h1>
+  <video id="me" autoplay playsinline muted></video> <!-- muted stops you hearing your own echo; playsinline is required for iPhones -->
+  <div id="bar"><div id="level"></div></div> <!-- the mic level bar -->
+  <p id="msg"></p> <!-- error messages show here, e.g. permission denied -->
+  <button id="start">Start camera</button> <!-- the browser only asks for camera access after a click -->
+  <button id="mic">Mute mic</button>
+  <button id="cam">Camera off</button>
+
+<script>
+let stream; // holds the live camera + mic feed once started
+
+document.getElementById("start").onclick = async () => { // runs when Start camera is clicked
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true }); // asks for camera + mic; the browser's permission popup appears here
+    document.getElementById("me").srcObject = stream; // shows the feed in the video box
+    startMeter(stream); // starts the mic level bar
+  } catch (err) {
+    document.getElementById("msg").textContent = "Couldn't open camera or mic: " + err.name; // NotAllowedError = clicked Block, NotFoundError = no device found
+  }
+};
+
+function toggle(kind, button, onText, offText) { // one helper for both buttons
+  if (!stream) return; // does nothing until the camera has started
+  const track = kind === "audio" ? stream.getAudioTracks()[0] : stream.getVideoTracks()[0]; // picks the mic or camera track
+  track.enabled = !track.enabled; // flips it on or off without stopping the stream
+  button.textContent = track.enabled ? onText : offText; // updates the button label
+}
+document.getElementById("mic").onclick = (e) => toggle("audio", e.target, "Mute mic", "Unmute mic"); // mute button
+document.getElementById("cam").onclick = (e) => toggle("video", e.target, "Camera off", "Camera on"); // camera button
+
+function startMeter(s) { // draws the mic level bar
+  const ctx = new AudioContext(); // the browser's audio engine
+  const analyser = ctx.createAnalyser(); // measures loudness
+  ctx.createMediaStreamSource(s).connect(analyser); // feeds your mic into the analyser
+  const data = new Uint8Array(analyser.fftSize); // buffer for raw sound samples
+  (function tick() { // runs once per screen frame
+    analyser.getByteTimeDomainData(data); // fills the buffer with the current sound wave
+    let peak = 0; // loudest sample this frame
+    for (const v of data) peak = Math.max(peak, Math.abs(v - 128) / 128); // 128 means silence, so distance from it is loudness
+    document.getElementById("level").style.width = Math.min(peak * 200, 100) + "%"; // the x200 makes quiet voices visible; capped at 100%
+    requestAnimationFrame(tick); // repeats
+  })();
+}
+</script>
+</body>
+</html>
