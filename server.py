@@ -311,3 +311,9 @@ if __name__ == "__main__":
     # port=8000 = the "door number" in the address (http://IP:8000).
     #   CHANGE: use another number like 8080 if 8000 is already taken.
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
+from fastapi.responses import FileResponse  # sends a file back to the browser (harmless if already imported)
+
+@app.get("/styles.css")  # answers the browser's request for the stylesheet
+def styles():
+    return FileResponse("styles.css", media_type="text/css")  # watch for: styles.css must be in the same folder as server.py
