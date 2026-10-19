@@ -88,6 +88,28 @@
         /* The text box where you type. flex: 1 = it takes all the leftover width. */
         #text { flex: 1; padding: 10px; box-sizing: border-box; }
 
+         /* Arrange the local and remote camera previews in two equal columns. */
+         .call-videos {
+            display: grid; /* Use a grid so both previews line up. */
+            grid-template-columns: repeat(2, minmax(0, 1fr)); /* Make two equal-width video columns. */
+            gap: 8px; /* Leave space between the previews. */
+            margin: 12px 0; /* Separate the previews from nearby controls. */
+         }
+
+         /* Keep each video inside its column and crop it to a consistent shape. */
+         .call-videos video {
+            width: 100%; /* Fill the available column width. */
+            aspect-ratio: 4 / 3; /* Keep video previews at a familiar camera shape. */
+            object-fit: cover; /* Fill the frame without stretching the video. */
+            background: #111; /* Show a dark area before video arrives. */
+            border-radius: 6px; /* Slightly soften the video frame corners. */
+         }
+
+         /* Stack the previews on narrow phones so each remains large enough to see. */
+         @media (max-width: 480px) {
+            .call-videos { grid-template-columns: 1fr; } /* Switch to one column below 480px. */
+         }
+
         /* The Send button. Same dark blue as the other pages so the site feels consistent. */
         button { padding: 10px 20px; background: darkblue; color: white; border: none; cursor: pointer; }
 

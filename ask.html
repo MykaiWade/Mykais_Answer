@@ -47,6 +47,26 @@
                  CHANGE: add a "required" before the ">" to make this box mandatory too. -->
             <textarea id="description" maxlength="1000"></textarea>
         </div>
+       
+        <!-- Row 3: the Badge dropdown. It sits under Description because it comes after that row. -->
+<div class="row">
+    <!-- for="badge" connects the label to the dropdown, so clicking the word opens it. CHANGE: edit the label text. -->
+    <label for="badge">Badge:</label>
+    <!-- id="badge" is the name the script uses to read the choice. CHANGE: add "required" before ">" to force a choice. -->
+    <select id="badge" name="badge">
+        <!-- The empty first option is the starting text. value="" means no badge was picked. -->
+        <option value="">Choose Badges</option>
+        <!-- optgroup = a bold heading (not clickable) with its options indented below. CHANGE: the label text is the group's name. -->
+        <optgroup label="Major">
+            <!-- value = what gets sent to the server (keep it short, UPERCASE,ONE WORD). The words between the tags are what visitors see. -->
+            <option value="ENGINEERING">ENGINEERING</option>
+            <option value="MATH">MATH</option>
+            <option value="HEALTH">HEALTH</option>
+            <option value="ARTS">ARTS</option>
+        </optgroup>
+        <!-- Second group. CHANGE: rename it, and add or remove options the same way. -->
+    </select>
+</div>
  
         <!-- The Submit button. type="submit" makes it send the form. CHANGE: edit the word "Submit". -->
         <button type="submit">Submit</button>

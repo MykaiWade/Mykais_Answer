@@ -38,6 +38,22 @@
     <!-- A link to the home page. href must match the file name exactly. -->
     <p><a href="index.html">Back to Home</a></p>
 
+    <!-- Optional video call button. type="button" keeps it from sending the chat form. CHANGE: edit the text between the tags. -->
+    <button type="button" id="videoBtn">Start video call</button>
+    <!-- This live status line tells people what the call is doing or why it could not start. -->
+    <p id="videoStatus" role="status">Video calls are available in matched chat rooms.</p>
+    <!-- This container places your preview and the other person's video together. -->
+    <div id="callVideos" class="call-videos">
+        <!-- Your camera preview; muted prevents hearing your own microphone through the speakers. -->
+        <video id="localVideo" autoplay muted playsinline hidden></video>
+        <!-- The other person's camera and microphone arrive through this video element. -->
+        <video id="remoteVideo" autoplay playsinline hidden></video>
+    </div>
+    <!-- The other person sees this button after receiving a call offer. -->
+    <button type="button" id="answerVideoCall" hidden>Answer call</button>
+    <!-- This button declines an incoming call or ends an active call. -->
+    <button type="button" id="endVideoCall" hidden>End call</button>
+
     <script>
         /* SCRIPT = what the page DOES. Everything below runs in the visitor's browser. */
 
@@ -50,6 +66,173 @@
 
         /* A shortcut to the white message box, so we don't have to look it up every time. */
         var messages = document.getElementById("messages");
+        // Stores the active browser-to-browser connection; null means there is no call.
+        var peerConnection = null;
+        // Holds this browser's camera and microphone tracks while a call is active.
+        var localStream = null;
+        // Keeps an incoming call offer until the person presses Answer.
+        var pendingOffer = null;
+        // Holds network candidates that arrive before the peer connection can use them.
+        var pendingCandidates = [];
+
+        // Sends WebRTC setup data through the existing chat WebSocket, but only when it is connected.
+        function sendSignal(signal) {
+            if (socket.readyState === WebSocket.OPEN) {
+                // The type marks this as call setup data so the server does not save it as chat text.
+                socket.send(JSON.stringify({ type: "signal", user_id: userId, signal: signal }));
+            }
+        }
+
+        // Creates the browser's WebRTC connection and wires its network/media events.
+        function createPeerConnection() {
+            peerConnection = new RTCPeerConnection({
+                // STUN helps browsers discover a route through many common home networks.
+                // A TURN server may be needed for calls across restrictive networks.
+                iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
+            });
+            // ICE candidates describe possible network routes; send each one to the other person.
+            peerConnection.onicecandidate = function (event) {
+                if (event.candidate) { sendSignal({ kind: "candidate", candidate: event.candidate }); }
+            };
+            // A remote media track arrived, so attach its stream to the other-person video element.
+            peerConnection.ontrack = function (event) {
+                var remoteVideo = document.getElementById("remoteVideo");
+                remoteVideo.srcObject = event.streams[0];
+                remoteVideo.hidden = false;
+                document.getElementById("videoStatus").textContent = "Call connected.";
+            };
+            // Show a useful message if WebRTC cannot establish the connection.
+            peerConnection.onconnectionstatechange = function () {
+                if (peerConnection && peerConnection.connectionState === "failed") {
+                    document.getElementById("videoStatus").textContent = "Call connection failed.";
+                }
+            };
+            // Add this browser's camera and microphone tracks to the peer connection.
+            localStream.getTracks().forEach(function (track) {
+                peerConnection.addTrack(track, localStream);
+            });
+        }
+
+        // Adds queued network routes after a remote offer or answer has been installed.
+        async function addPendingCandidates() {
+            while (pendingCandidates.length && peerConnection && peerConnection.remoteDescription) {
+                // shift() removes the first queued candidate after adding it to WebRTC.
+                await peerConnection.addIceCandidate(pendingCandidates.shift());
+            }
+        }
+
+        // Closes the call, releases camera/microphone access, and returns the controls to idle.
+        function finishCall(notifyPeer, message) {
+            // Tell the other participant to close their call too when this is a local hang-up.
+            if (notifyPeer) { sendSignal({ kind: "hangup" }); }
+            // Close the network connection and clear its reference.
+            if (peerConnection) { peerConnection.close(); peerConnection = null; }
+            // Stop every media track so the camera and microphone are no longer in use.
+            if (localStream) {
+                localStream.getTracks().forEach(function (track) { track.stop(); });
+                localStream = null;
+            }
+            // Detach the old streams from the video elements.
+            document.getElementById("localVideo").srcObject = null;
+            document.getElementById("remoteVideo").srcObject = null;
+            // Hide empty video boxes until the next call.
+            document.getElementById("localVideo").hidden = true;
+            document.getElementById("remoteVideo").hidden = true;
+            // Allow another call and hide answer/end controls.
+            document.getElementById("videoBtn").disabled = false;
+            document.getElementById("answerVideoCall").hidden = true;
+            document.getElementById("endVideoCall").hidden = true;
+            // Clear call setup data so it cannot affect a later call.
+            pendingOffer = null;
+            pendingCandidates = [];
+            // Update the status only when the caller provided a message.
+            if (message) { document.getElementById("videoStatus").textContent = message; }
+        }
+
+        // Starts a new call after the user clicks Start video call.
+        async function startVideoCall() {
+            // A call needs both a matched room and an open server connection for signaling.
+            if (!room || socket.readyState !== WebSocket.OPEN) {
+                document.getElementById("videoStatus").textContent = "Open a matched chat room before calling.";
+                return;
+            }
+            // Prevent repeated clicks while camera permission and call setup are in progress.
+            document.getElementById("videoBtn").disabled = true;
+            document.getElementById("videoStatus").textContent = "Starting camera and microphone...";
+            try {
+                // Ask the browser for camera and microphone access after the user's click.
+                localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+                var localVideo = document.getElementById("localVideo");
+                // Show the camera preview locally.
+                localVideo.srcObject = localStream;
+                localVideo.hidden = false;
+                // Create the peer connection and describe the media this browser will send.
+                createPeerConnection();
+                var offer = await peerConnection.createOffer();
+                // Save the offer locally, then send it so the other person can answer.
+                await peerConnection.setLocalDescription(offer);
+                sendSignal({ kind: "offer", description: peerConnection.localDescription });
+                document.getElementById("videoStatus").textContent = "Calling...";
+                document.getElementById("endVideoCall").hidden = false;
+            } catch (error) {
+                // Release any resources and explain common permission/startup failures.
+                finishCall(false, error.name === "NotAllowedError"
+                    ? "Allow camera and microphone access to call."
+                    : "Couldn't start the call. Check camera and microphone access.");
+            }
+        }
+
+        // Accepts the offer after the other participant clicks Answer call.
+        async function answerVideoCall() {
+            try {
+                // Ask for this participant's camera and microphone.
+                localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+                var localVideo = document.getElementById("localVideo");
+                localVideo.srcObject = localStream;
+                localVideo.hidden = false;
+                // Create a peer connection and apply the offer received from the caller.
+                createPeerConnection();
+                await peerConnection.setRemoteDescription(pendingOffer.description);
+                // Apply any network routes that arrived while the user was deciding to answer.
+                await addPendingCandidates();
+                // Create an answer describing this participant's media and send it to the caller.
+                var answer = await peerConnection.createAnswer();
+                await peerConnection.setLocalDescription(answer);
+                sendSignal({ kind: "answer", description: peerConnection.localDescription });
+                document.getElementById("videoStatus").textContent = "Connecting...";
+                document.getElementById("answerVideoCall").hidden = true;
+            } catch (error) {
+                // Clean up if permission or WebRTC setup fails.
+                finishCall(false, "Couldn't answer. Check camera and microphone access.");
+            }
+        }
+
+        // Handles call offers, answers, network routes, and hang-ups received from the server.
+        async function handleSignal(signal) {
+            if (signal.kind === "offer") {
+                // Save the offer and show the incoming-call controls.
+                pendingOffer = signal;
+                document.getElementById("videoBtn").disabled = true;
+                document.getElementById("videoStatus").textContent = "Incoming video call.";
+                document.getElementById("answerVideoCall").hidden = false;
+                document.getElementById("endVideoCall").hidden = false;
+            } else if (signal.kind === "answer" && peerConnection) {
+                // Apply the other person's answer to finish negotiating the connection.
+                await peerConnection.setRemoteDescription(signal.description);
+                await addPendingCandidates();
+            } else if (signal.kind === "candidate") {
+                if (peerConnection && peerConnection.remoteDescription) {
+                    // The connection is ready, so add this route immediately.
+                    await peerConnection.addIceCandidate(signal.candidate);
+                } else {
+                    // Queue early routes until the remote offer or answer is installed.
+                    pendingCandidates.push(signal.candidate);
+                }
+            } else if (signal.kind === "hangup") {
+                // The other participant ended or declined the call.
+                finishCall(false, "The other person ended the call.");
+            }
+        }
 
         /* Adds one bubble to the message box. m has a user_id (who sent it) and text (what they said). */
         function addMessage(m) {
@@ -80,7 +263,11 @@
 
         /* Runs every time the server sends a message: first the saved history, then new messages live. */
         socket.onmessage = function (event) {
-            addMessage(JSON.parse(event.data));
+            // Decode the server's JSON packet once so we can identify its kind.
+            var data = JSON.parse(event.data);
+            // Call setup packets go to WebRTC; normal packets become chat bubbles.
+            if (data.type === "signal") { handleSignal(data.signal).catch(function () {}); }
+            else { addMessage(data); }
         };
 
         /* Runs if the connection drops (server stopped, Wi-Fi lost). Shows a notice instead of failing silently.
@@ -104,6 +291,13 @@
             /* Clear the box so you can type the next message. */
             box.value = "";
         });
+
+        // Connect the visible buttons to their call actions.
+        document.getElementById("videoBtn").addEventListener("click", startVideoCall);
+        document.getElementById("answerVideoCall").addEventListener("click", answerVideoCall);
+        // Hang up locally and notify the other browser.
+        document.getElementById("endVideoCall").addEventListener("click", function () {
+            finishCall(true, "Call ended.");
+        });
     </script>
 </body>
-</html>

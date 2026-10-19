@@ -263,6 +263,23 @@ async def chat(ws: WebSocket, room: str):
     try:
         while True:   # Keep listening for new messages until the visitor leaves.
             data = await ws.receive_json()
+            # Call setup packets must be relayed live and must not be saved as chat history.
+            if data.get("type") == "signal":
+                # Get the WebRTC offer, answer, network candidate, or hang-up packet.
+                signal = data.get("signal")
+                # Ignore malformed call packets instead of trying to send them.
+                if not isinstance(signal, dict):
+                    continue
+                # Add the sender id and packet type so the browser can tell it from chat text.
+                packet = {"type": "signal", "user_id": str(data.get("user_id", ""))[:64], "signal": signal}
+                # Send the call setup data to the other open windows in this room.
+                for client in list(open_chats[room]):
+                    # Do not send the packet back to the browser that created it.
+                    if client is not ws:
+                        await client.send_json(packet)
+                # Skip the text-message save/broadcast code below.
+                continue
+
             # Clean the message the same way as questions.
             text = str(data.get("text", "")).strip()[:MAX_MESSAGE]
             user_id = str(data.get("user_id", "")).strip()[:64]
@@ -304,6 +321,13 @@ def page(page: str):
     return FileResponse(path)
 
 
+# Serve the stylesheet before uvicorn starts, including when the app is imported.
+@app.get("/styles.css")
+def styles():
+    # Build the stylesheet path from the server folder so it works from any working directory.
+    return FileResponse(os.path.join(HERE, "styles.css"), media_type="text/css")
+
+
 # This block only runs when you type "python server.py" (not when another file imports this one).
 if __name__ == "__main__":
     # host="0.0.0.0" = accept connections from other devices on your Wi-Fi.
@@ -312,8 +336,3 @@ if __name__ == "__main__":
     #   CHANGE: use another number like 8080 if 8000 is already taken.
     uvicorn.run(app, host="0.0.0.0", port=8000)
 
-from fastapi.responses import FileResponse  # sends a file back to the browser (harmless if already imported)
-
-@app.get("/styles.css")  # answers the browser's request for the stylesheet
-def styles():
-    return FileResponse("styles.css", media_type="text/css")  # watch for: styles.css must be in the same folder as server.py
