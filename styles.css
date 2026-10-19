@@ -113,4 +113,11 @@
         /* The Send button. Same dark blue as the other pages so the site feels consistent. */
         button { padding: 10px 20px; background: darkblue; color: white; border: none; cursor: pointer; }
 
-        
+        /* The strip that holds the tags. flex + wrap puts tags side by side and wraps to a new line on narrow phones. */
+#minorTags { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+
+/* One tag: a rounded pill. CHANGE: background (fill) and color (text) to match your site. */
+.tag { background: #dbeafe; color: #1e3a8a; border-radius: 999px; padding: 4px 6px 4px 12px; font-size: 14px; display: inline-flex; align-items: center; gap: 6px; }
+
+/* The x button inside a tag. No border or fill, so it looks like part of the pill rather than a big button. */
+.tag button { background: none; border: none; color: inherit; cursor: pointer; font-size: 16px; line-height: 1; padding: 0 4px; }

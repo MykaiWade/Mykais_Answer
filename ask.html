@@ -64,9 +64,18 @@
             <option value="HEALTH">HEALTH</option>
             <option value="ARTS">ARTS</option>
         </optgroup>
-        <!-- Second group. CHANGE: rename it, and add or remove options the same way. -->
+        
     </select>
 </div>
+
+<!-- Row 4: the Minor badge menu. It stays invisible until a major badge is picked. -->
+        <div class="row" id="minorRow" style="display: none;">
+            <label for="minor">Minor badges:</label>
+            <select id="minor"></select>
+        </div>
+ 
+        <!-- Picked minor badges show up here as buttons. Click one to remove it. -->
+        <div id="picked"></div>
  
         <!-- The Submit button. type="submit" makes it send the form. CHANGE: edit the word "Submit". -->
         <button type="submit">Submit</button>
@@ -78,7 +87,7 @@
     <!-- A link to the home page. href must match the file name exactly. -->
     <p><a href="index.html">Back to Home</a></p>
  
-    <script>
+    <!-- <script>
         /* SCRIPT = what the page DOES. Everything below runs in the visitor's browser. */
  
         /* Gives each browser a random ID and remembers it, so the server knows who is who.
@@ -189,7 +198,7 @@
                 box.innerHTML = "";
                 box.appendChild(makeCard("Couldn't reach the server", "", "Make sure server.py is running, then try again."));
             });
-        });
+        });  -->
     </script>
 </body>
 </html>

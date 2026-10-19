@@ -38,23 +38,36 @@
     <!-- A link to the home page. href must match the file name exactly. -->
     <p><a href="index.html">Back to Home</a></p>
 
-    <!-- Optional video call button. type="button" keeps it from sending the chat form. CHANGE: edit the text between the tags. -->
+
+    <!-- <Optional video call button. type="button" keeps it from sending the chat form. CHANGE: edit the text between the tags.
+    
     <button type="button" id="videoBtn">Start video call</button>
-    <!-- This live status line tells people what the call is doing or why it could not start. -->
-    <p id="videoStatus" role="status">Video calls are available in matched chat rooms.</p>
-    <!-- This container places your preview and the other person's video together. -->
-    <div id="callVideos" class="call-videos">
-        <!-- Your camera preview; muted prevents hearing your own microphone through the speakers. -->
-        <video id="localVideo" autoplay muted playsinline hidden></video>
-        <!-- The other person's camera and microphone arrive through this video element. -->
+
+         This live status line tells people what the call is doing or why it could not start. 
+  
+         <p id="videoStatus" role="status">Video calls are available in matched chat rooms.</p>
+    
+         This container places your preview and the other person's video together. -->
+
+    <!-- <div id="callVideos" class="call-videos">
+         Your camera preview; muted prevents hearing your own microphone through the speakers. -->
+        
+         <video id="localVideo" autoplay muted playsinline hidden></video>
+       
+         <!-- The other person's camera and microphone arrive through this video element. -->
+        
         <video id="remoteVideo" autoplay playsinline hidden></video>
     </div>
+  
     <!-- The other person sees this button after receiving a call offer. -->
+   
     <button type="button" id="answerVideoCall" hidden>Answer call</button>
+   
     <!-- This button declines an incoming call or ends an active call. -->
+  
     <button type="button" id="endVideoCall" hidden>End call</button>
 
-    <script>
+    <!-- <script>
         /* SCRIPT = what the page DOES. Everything below runs in the visitor's browser. */
 
         /* Your browser's random ID, saved earlier by ask.html. The page compares it to each
@@ -297,7 +310,7 @@
         document.getElementById("answerVideoCall").addEventListener("click", answerVideoCall);
         // Hang up locally and notify the other browser.
         document.getElementById("endVideoCall").addEventListener("click", function () {
-            finishCall(true, "Call ended.");
-        });
-    </script>
-</body>
+            finishCall(true, "Call ended.");  
+        });  
+    </script> -->
+</body> 

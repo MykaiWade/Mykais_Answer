@@ -1,0 +1,24 @@
+# Lines starting with # are ignored, so you can leave notes for yourself.
+# Format: a Major(...) line, then one or more Minor(...) lines under it.
+# Separate minor badges with commas. Capital letters are added for you.
+
+Template:
+
+# Major()
+# Minor()
+
+# 10/19/26 - (Mykai Wade) Created file. 
+
+Major(MATH)
+Minor(CALCULUS, STATISTICS, ALGEBRA, GEOMETRY)
+
+Major(ENGINEERING)
+Minor(ELECTRICAL, MECHANICAL, CIVIL, COMPUTER)
+
+Major(HEALTH)
+Minor(NURSING, NUTRITION, PSYCHOLOGY, FITNESS)
+
+Major(ARTS)
+Minor(MUSIC, DRAWING, WRITING, THEATER)
+
+
