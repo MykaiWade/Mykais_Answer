@@ -18,17 +18,55 @@
     <link rel="stylesheet" href="styles.css">
 
 </head>
+
 <body>
     <!-- BODY = everything visitors see, top to bottom. -->
  
     <!-- The big heading. CHANGE: edit the text between the tags. -->
     <h1>Ask a Question</h1>
+
+    <!-- Profile name is public, but this site does not verify identity yet. -->
+    <section class="profile-panel">
+        <h2>Account</h2>
+        <p>Your name is public. Your email is only for signing in and is not verified.</p>
+        <p>There is no password reset yet. Save your password somewhere safe.</p>
+        <p id="profileStatus" role="status">Loading profile...</p>
+        <form id="registerForm">
+            <div class="row">
+                <label for="realName">Real name:</label>
+                <input type="text" id="realName" maxlength="100" autocomplete="name" required>
+            </div>
+            <div class="row">
+                <label for="registerEmail">Email:</label>
+                <input type="email" id="registerEmail" maxlength="254" autocomplete="email" required>
+            </div>
+            <div class="row">
+                <label for="registerPassword">Password:</label>
+                <input type="password" id="registerPassword" minlength="12" maxlength="128" autocomplete="new-password" required>
+            </div>
+            <button type="submit">Create account</button>
+            <button type="button" id="showLogin">Already have an account? Sign in</button>
+        </form>
+        <form id="loginForm" hidden>
+            <div class="row">
+                <label for="loginEmail">Email:</label>
+                <input type="email" id="loginEmail" maxlength="254" autocomplete="email" required>
+            </div>
+            <div class="row">
+                <label for="loginPassword">Password:</label>
+                <input type="password" id="loginPassword" maxlength="128" autocomplete="current-password" required>
+            </div>
+            <button type="submit">Sign in</button>
+            <button type="button" id="showRegister">Create a new account</button>
+        </form>
+        <button type="button" id="logoutButton" hidden>Sign out</button>
+    </section>
  
     <!-- An empty spot for "New reply" cards. The script at the bottom fills it in if someone replied.
          id="inbox" is its name so the script can find it. -->
     <div id="inbox"></div>
  
-    <!-- The form. id="askForm" is its name so the script can find it. -->
+    <!-- The question form. ask.js reads these fields when Submit is clicked. -->
     <form id="askForm">
  
         <!-- Row 1: the Question box. -->
@@ -75,123 +113,13 @@
  
     <!-- A link to the home page. href must match the file name exactly. -->
     <p><a href="index.html">Back to Home</a></p>
+ 
+    <script src="profile.js"></script>
+    <!-- Loads the badge menus before ask.js uses them. -->
+    <script src="badges.js"></script>
+    <!-- Loads the submit and match code. -->
+    <script src="ask.js"></script>
 
-
-
- 
-    <!-- <script>
-        /* SCRIPT = what the page DOES. Everything below runs in the visitor's browser. */
- 
-        /* Gives each browser a random ID and remembers it, so the server knows who is who.
-           It is NOT a login: clearing browser data creates a new ID. */
-        function getUserId() {
-            /* localStorage = a small notebook the browser keeps for this site. */
-            var id = localStorage.getItem("userId");
-            /* If there's no ID saved yet, make one from random letters/numbers plus the current time. */
-            if (!id) {
-                id = Math.random().toString(36).slice(2) + Date.now().toString(36);
-                localStorage.setItem("userId", id);
-            }
-            return id;
-        }
- 
-        /* Builds one white card.
-           title = bold top line. text = paragraph under it (can be empty).
-           note = small gray line (can be empty). chatRoom = if given, adds a Chat button.
-           CHANGE: edit the pieces below to change how every card looks or what it says. */
-        function makeCard(title, text, note, chatRoom) {
-            var card = document.createElement("div");   /* Make an empty box. */
-            card.className = "card";                    /* Give it the white card style from above. */
- 
-            /* Bold title. textContent (instead of innerHTML) treats everything as plain text, so a
-               stranger can't sneak code into the page through their question. Keep it this way. */
-            var strong = document.createElement("strong");
-            strong.textContent = title;
-            card.appendChild(strong);
- 
-            /* Paragraph, only if there's text. */
-            if (text) {
-                var p = document.createElement("p");
-                p.textContent = text;
-                card.appendChild(p);
-            }
-            /* Small gray note, only if there is one. */
-            if (note) {
-                var small = document.createElement("div");
-                small.className = "small";
-                small.textContent = note;
-                card.appendChild(small);
-            }
-            /* Chat button, only if a room was given. It links to chat.html?room=3-7 */
-            if (chatRoom) {
-                var link = document.createElement("a");
-                link.href = "chat.html?room=" + chatRoom;
-                link.textContent = "Chat";   /* CHANGE: the button's wording. */
-                card.appendChild(link);
-            }
-            return card;
-        }
- 
-        /* WHEN THE PAGE LOADS: ask the server if anyone replied to this browser's questions. */
-        fetch("/api/inbox?user_id=" + encodeURIComponent(getUserId()))
-            .then(function (r) { return r.json(); })      /* Turn the server's answer into a list. */
-            .then(function (rooms) {
-                var box = document.getElementById("inbox");
-                /* Make a "New reply" card for each waiting chat. CHANGE: the wording in quotes. */
-                rooms.forEach(function (r) {
-                    box.appendChild(makeCard("New reply", r.text, "Someone answered. Open the chat to reply.", r.room));
-                });
-            })
-            .catch(function () { /* If the server can't be reached, quietly skip the inbox. */ });
- 
-        /* WHEN SOMEONE CLICKS SUBMIT: */
-        document.getElementById("askForm").addEventListener("submit", function (event) {
-            /* Stops the browser from reloading the page, which would erase what they typed. */
-            event.preventDefault();
- 
-            /* Send the question to the server. */
-            fetch("/api/questions", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    user_id: getUserId(),                                    /* Who is asking. */
-                    question: document.getElementById("question").value,    /* What they typed in the question box. */
-                    description: document.getElementById("description").value  /* What they typed in the description box. */
-                })
-            })
-            .then(function (r) {
-                /* If the server refused (error), jump to the error message at the bottom. */
-                if (!r.ok) { throw new Error("Server said no"); }
-                return r.json();
-            })
-            .then(function (data) {
-                var box = document.getElementById("result");
-                box.innerHTML = "";   /* Clear any old results first. */
- 
-                /* No matches: tell them it's saved. CHANGE: the wording in quotes. */
-                if (data.matches.length === 0) {
-                    box.appendChild(makeCard("Question saved", "", "No similar questions yet. Check back later for replies."));
-                    return;
-                }
- 
-                /* Matches found: show a heading card, then one card per match. */
-                box.appendChild(makeCard("People with similar questions", "", ""));
-                data.matches.forEach(function (m) {
-                    /* The room name is both question ids, smaller first, like "3-7".
-                       Both people must end up with the SAME name, which is why it's sorted. */
-                    var room = Math.min(data.id, m.id) + "-" + Math.max(data.id, m.id);
-                    var pct = Math.round(m.score * 100) + "% similar";   /* 0.33 becomes "33% similar". */
-                    box.appendChild(makeCard(m.question, m.description, pct, room));
-                });
-            })
-            .catch(function () {
-                /* Shown if the server is off or unreachable. CHANGE: the wording in quotes. */
-                var box = document.getElementById("result");
-                box.innerHTML = "";
-                box.appendChild(makeCard("Couldn't reach the server", "", "Make sure server.py is running, then try again."));
-            });
-        });  -->
-    </script>
 </body>
 </html>
  

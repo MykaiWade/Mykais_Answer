@@ -57,6 +57,10 @@
         /* Hover effect: card turns light blue when the mouse is over it, so visitors know it's clickable */
         .card:hover { background: #eaf4fb; }
 
+        /* Panels for profile setup and the personal chat-room list. */
+        .profile-panel { background: white; padding: 14px; margin: 16px 0; border: 1px solid darkblue; border-radius: 8px; }
+        .profile-panel h2 { margin-top: 0; }
+
         /* The line under the heading showing what the two questions are about.
            font-size = text size. color = gray. margin-bottom = space below it. */
         #topic { font-size: 14px; color: #444; margin-bottom: 12px; }
@@ -96,6 +100,17 @@
             margin: 12px 0; /* Separate the previews from nearby controls. */
          }
 
+         .call-remote-videos {
+            display: grid; /* Keep each remote participant in a separate tile. */
+            grid-template-columns: repeat(2, minmax(0, 1fr)); /* Show several call participants in a grid. */
+            gap: 8px; /* Separate the participant tiles. */
+         }
+
+         .call-video span {
+            display: block; /* Put each participant's name below their video. */
+            margin-top: 4px; /* Add a little space below the video. */
+         }
+
          /* Keep each video inside its column and crop it to a consistent shape. */
          .call-videos video {
             width: 100%; /* Fill the available column width. */
@@ -108,6 +123,7 @@
          /* Stack the previews on narrow phones so each remains large enough to see. */
          @media (max-width: 480px) {
             .call-videos { grid-template-columns: 1fr; } /* Switch to one column below 480px. */
+            .call-remote-videos { grid-template-columns: 1fr; } /* Keep remote videos readable on phones. */
          }
 
         /* The Send button. Same dark blue as the other pages so the site feels consistent. */

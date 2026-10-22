@@ -2,16 +2,16 @@
 # Format: a Major(...) line, then one or more Minor(...) lines under it.
 # Separate minor badges with commas. Capital letters are added for you.
 
-Template:
+#Template:
 
 # Major: Minor badges
 
 # 10/19/26 - (Mykai Wade) Created file. 
 
 
-MATH: CALCULUS, STATISTICS, ALGEBRA, GEOMETRY
+MATH: CALCULUS, STATISTICS, ALGEBRA, GEOMETRY, DIFFERNENTIAL EQUATIONS
 
-ENGINEERING: ELECTRICAL, MECHANICAL, CIVIL, COMPUTER
+ENGINEERING: ELECTRICAL, MECHANICAL, CIVIL, COMPUTER, CHEMICAL, 
 
 HEALTH: NURSING, NUTRITION, PSYCHOLOGY, FITNESS
 
