@@ -31,9 +31,7 @@ WORK WITH ONE ANOTHER TO GET WHAT YOU THINK NEEDS TO GET DONE, DONE AS SOON AS P
 
 PEOPLE MYKAI WORKED WITH:
 
-STARTING THE WEBSITE ON WINDOWS:
 
-Double-click `start_server.bat` to start the local server, then open http://127.0.0.1:8000 in your browser. Keep the black command window open while using the site; press Ctrl+C in it to stop the server. This launcher requires Python, FastAPI, and Uvicorn to be installed.
 
 PROFILES:
 
