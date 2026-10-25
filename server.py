@@ -526,7 +526,7 @@ def user_chats(request: Request):
 # It lives in memory only, so it resets when the server restarts (saved messages stay in the database).
 open_chats = {}
 active_calls = {}
-MAX_CALL_PARTICIPANTS = 4
+MAX_CALL_PARTICIPANTS = 20
 
 
 @app.websocket("/ws/{room}")   # A WebSocket is a connection that stays open so messages arrive instantly.
@@ -612,7 +612,7 @@ async def chat(ws: WebSocket, room: str):
                         active_calls.pop(room, None)
                     await ws.send_json({
                         "type": "error",
-                        "message": "This prototype supports up to four people in a call.",
+                        "message": "This prototype supports up to twenty people in a call.",
                     })
                     continue
 
