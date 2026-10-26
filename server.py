@@ -340,6 +340,10 @@ class NewQuestion(BaseModel):
     tags: list[str] = Field(default_factory=list)  # Selected major and minor badges.
 
 
+class NewPublicRoom(BaseModel):  # Validates the question submitted to create a public room.
+    question: str  # Holds the required room topic supplied by the browser.
+
+
 @app.post("/api/questions")   # This is the address ask.html sends the form to.
 def add_question(q: NewQuestion, request: Request):
     # Clean up the text: strip() removes extra spaces, [:200] cuts it to the size limit.
@@ -411,10 +415,63 @@ def add_question(q: NewQuestion, request: Request):
     return {"id": new_id, "matches": matches[:5]}
 
 
+@app.post("/api/public-rooms")  # Exposes the authenticated endpoint for creating public rooms.
+def create_public_room(room: NewPublicRoom, request: Request):
+    question = room.question.strip()[:MAX_QUESTION]  # Trims the topic and enforces the question length limit.
+    if not question:
+        raise HTTPException(status_code=400, detail="A room question is required.")  # Rejects blank topics.
+
+    con = db()  # Opens the database connection used to save the topic.
+    profile = private_profile(con, request.cookies.get(SESSION_COOKIE))  # Identifies the signed-in room creator.
+    if not profile:
+        con.close()  # Releases the database connection before returning an authentication error.
+        raise HTTPException(status_code=401, detail="Sign in before creating a room.")  # Requires a signed-in creator.
+    cur = con.execute(  # Stores the topic as a question so it has a stable database ID.
+        "INSERT INTO questions (user_id, question, description, created, tags) "
+        "VALUES (?, ?, '', ?, '[]')",
+        (profile["user_id"], question, time.time()),
+    )
+    question_id = cur.lastrowid  # Uses the saved question ID as the room identifier.
+    con.commit()  # Persists the newly created public room topic.
+    con.close()  # Closes the database connection after saving.
+    return {"id": question_id, "room": f"question-{question_id}", "question": question}  # Returns the shareable room link data.
+
+
+@app.get("/api/public-rooms")  # Exposes the public list and activity counts used by Ask Mykai.
+async def public_rooms():
+    con = db()  # Opens the database to read all room topics and saved message totals.
+    rows = con.execute(  # Joins room topics to saved messages so quiet rooms remain visible too.
+        "SELECT questions.id, questions.question, questions.created, "
+        "COUNT(messages.id) AS message_count "
+        "FROM questions LEFT JOIN messages "
+        "ON messages.room = 'question-' || questions.id "
+        "GROUP BY questions.id ORDER BY questions.id DESC"
+    ).fetchall()
+    con.close()  # Closes the database before calculating the in-memory presence counts.
+
+    rooms = []  # Collects the public room details returned to the browser.
+    for row in rows:
+        room = f"question-{row['id']}"  # Builds the stable URL room key from the question ID.
+        members = open_chat_members.get(room, {})  # Reads connected visitor IDs for this room.
+        rooms.append({  # Adds topic, saved-message, and live-presence data for this room.
+            "id": row["id"],  # Includes the source question ID.
+            "room": room,  # Includes the key used by the chat page.
+            "question": row["question"],  # Includes the room's displayed topic.
+            "created": row["created"],  # Provides a recency tie-breaker for room rankings.
+            "message_count": row["message_count"],  # Reports the total number of saved messages.
+            "active_people": len(set(members.values())),  # Counts unique connected profiles and guests.
+        })
+    return rooms  # Sends all public room summaries to the browser.
+
+
 # =====================================================================
 # CHAT ROOMS
 # A room is named after the two question ids it connects, smaller number first (like "3-7").
 # =====================================================================
+
+def is_public_room(room):  # Identifies room keys that refer to a single public question topic.
+    return re.fullmatch(r"question-\d+", room) is not None  # Accepts only the public-room key format.
+
 
 def parse_room(room):
     # Checks a room name looks like "number-number" and returns the two numbers.
@@ -427,6 +484,17 @@ def parse_room(room):
 
 @app.get("/api/room/{room}")   # chat.html asks this to show what the chat is about.
 def room_info(room: str):
+    if is_public_room(room):  # Loads the single topic when this is a public question room.
+        question_id = int(room.split("-", 1)[1])  # Extracts the topic ID from the public room key.
+        con = db()  # Opens the database to retrieve the room topic.
+        question = con.execute(  # Finds the topic associated with this public room.
+            "SELECT question FROM questions WHERE id = ?", (question_id,)
+        ).fetchone()
+        con.close()  # Releases the database connection after the lookup.
+        if not question:
+            raise HTTPException(status_code=404, detail="This public room was not found.")  # Rejects nonexistent rooms.
+        return {"questions": [question["question"]], "public": True}  # Returns the topic and public-room marker.
+
     a, b = parse_room(room)
     con = db()
     # Look up both questions by id and return their text.
@@ -453,6 +521,8 @@ def inbox(request: Request):
     waiting = []
     # Look at every room that has messages.
     for r in con.execute("SELECT DISTINCT room FROM messages").fetchall():
+        if is_public_room(r["room"]):
+            continue  # Keeps public-room messages out of the private question-reply inbox.
         a, b = parse_room(r["room"])
         # Only care about rooms that include one of my questions.
         if a in my_ids or b in my_ids:
@@ -487,6 +557,8 @@ def user_chats(request: Request):
     rooms = []
     # A room is listed after its first saved message; unopened matches are not chat rooms yet.
     for row in con.execute("SELECT DISTINCT room FROM messages").fetchall():
+        if is_public_room(row["room"]):
+            continue  # Keeps public discussions out of the personal pair-chat list.
         first_id, second_id = parse_room(row["room"])
         my_question_id = None
         if first_id in my_questions:
@@ -525,6 +597,7 @@ def user_chats(request: Request):
 # Keeps track of open chat windows and active call participants, grouped by room.
 # It lives in memory only, so it resets when the server restarts (saved messages stay in the database).
 open_chats = {}
+open_chat_members = {}  # Tracks each connected visitor by public room for live active counts.
 active_calls = {}
 MAX_CALL_PARTICIPANTS = 20
 
@@ -532,11 +605,22 @@ MAX_CALL_PARTICIPANTS = 20
 @app.websocket("/ws/{room}")   # A WebSocket is a connection that stays open so messages arrive instantly.
 async def chat(ws: WebSocket, room: str):
     # Reject bad room names right away.
-    try:
-        parse_room(room)
-    except HTTPException:
-        await ws.close()
-        return
+    if is_public_room(room):  # Validates that public rooms point to an existing question.
+        con = db()  # Opens the database to verify the public room topic.
+        question_id = int(room.split("-", 1)[1])  # Extracts the question ID from the room key.
+        exists = con.execute(  # Checks whether the referenced room topic exists.
+            "SELECT 1 FROM questions WHERE id = ?", (question_id,)
+        ).fetchone()
+        con.close()  # Closes the database after validating the topic.
+        if not exists:
+            await ws.close()  # Refuses a WebSocket request for a nonexistent room.
+            return  # Stops processing the invalid room connection.
+    else:
+        try:
+            parse_room(room)
+        except HTTPException:
+            await ws.close()
+            return
 
     # Browsers attach session cookies to WebSockets, so block cross-site connection attempts.
     request_scheme = "https" if ws.url.scheme in ("https", "wss") else "http"
@@ -578,6 +662,9 @@ async def chat(ws: WebSocket, room: str):
             "verified": bool(m["verified"]),
         })
 
+    open_chat_members.setdefault(room, {})[ws] = (  # Adds this connection to live room presence counts.
+        user_id or "guest:" + secrets.token_urlsafe(12)
+    )
     try:
         while True:   # Keep listening for new messages until the visitor leaves.
             data = await ws.receive_json()
@@ -691,6 +778,10 @@ async def chat(ws: WebSocket, room: str):
     except WebSocketDisconnect:
         # The visitor closed the page: remove them from the room.
         open_chats[room].discard(ws)
+        members = open_chat_members.get(room, {})  # Looks up the presence map for the disconnected room.
+        members.pop(ws, None)  # Removes this visitor so the active count stays accurate.
+        if not members:  # Drops the room entry after its last connected visitor leaves.
+            open_chat_members.pop(room, None)  # Removes empty maps to avoid retaining unused room state.
         participants = active_calls.get(room, {})
         participant = participants.pop(ws, None)
         if participant:
@@ -728,8 +819,8 @@ def styles():
     return FileResponse(os.path.join(HERE, "styles.css"), media_type="text/css")
 
 # Extra files the browser may download besides pages. Like PAGES, this is a safety list.
-# CHANGE: add a file name here whenever you make a new .js or .txt file the page needs.
-PUBLIC_FILES = {"badges.txt", "badges.js", "ask.js", "profile.js", "chat.js"}
+# CHANGE: add each browser asset here; rooms.js supplies public-room listing and creation behavior.
+PUBLIC_FILES = {"badges.txt", "badges.js", "ask.js", "profile.js", "chat.js", "rooms.js"}  # Allows the room script to load.
 
 @app.get("/{name}")   # Matches approved browser assets like /badges.js and /profile.js.
 def public_file(name: str):

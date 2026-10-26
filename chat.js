@@ -22,7 +22,7 @@
     var localVideo = document.getElementById("localVideo");
     var remoteVideos = document.getElementById("remoteVideos");
     var room = new URLSearchParams(window.location.search).get("room");
-    var hasValidRoom = room && /^\d+-\d+$/.test(room);
+    var hasValidRoom = room && /^(?:\d+-\d+|question-\d+)$/.test(room); // Accepts legacy pair rooms and public question rooms.
     var socket = null;
     var callStream = null;
     var callParticipantId = null;
@@ -387,7 +387,8 @@
                         throw new Error(data.detail || "This chat could not be loaded.");
                     }
                     callSection.hidden = false;
-                    topic.textContent = "About: " + data.questions.join(" | ");
+                    topic.textContent = "About: " + data.questions.join(" | ") // Shows all question topics attached to this room.
+                        + (data.public ? " — Public room; share this page link so others can join." : "");
                     return true;
                 });
             })

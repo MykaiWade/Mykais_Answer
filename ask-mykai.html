@@ -2,19 +2,111 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <!-- Makes the page fit phone screens; leave this line alone -->
+    <!-- Sets the viewport so the public-room page scales to phone screens. -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- Text shown on the browser tab -->
-    <title>Ask-Mykai</title>
+    <!-- Names the Ask Mykai page shown in the browser tab. -->
+    <title>Ask Mykai — Public Rooms</title>
+    <!-- Loads the shared site styles for room cards, forms, and account panels. -->
     <link rel="stylesheet" href="styles.css">
-
 </head>
 <body>
-    
-    <h1>Message Mykai</h1>
+    <!-- Introduces the public room feature and explains its join and messaging rules. -->
+    <h1>Ask Mykai</h1>
+    <p>Start a public question room or join a conversation. Anyone with a room link can join and read; sign in to send messages.</p>
 
+    <!-- Provides sign-in and account creation controls required for posting messages or rooms. -->
+    <section class="profile-panel">
+        <h2>Account</h2>
+        <p>Your name is public. Your email is only for signing in and is not verified.</p>
+        <p>There is no password reset yet. Save your password somewhere safe.</p>
+        <!-- Shows the current sign-in state and account feedback from profile.js. -->
+        <p id="profileStatus" role="status">Loading profile...</p>
+        <!-- Collects the public name, email, and password needed to register. -->
+        <form id="registerForm">
+            <!-- Collects the account holder's public name. -->
+            <div class="row">
+                <label for="realName">Real name:</label>
+                <input type="text" id="realName" maxlength="100" autocomplete="name" required>
+            </div>
+            <!-- Collects the private sign-in email address. -->
+            <div class="row">
+                <label for="registerEmail">Email:</label>
+                <input type="email" id="registerEmail" maxlength="254" autocomplete="email" required>
+            </div>
+            <!-- Collects the password for the new account. -->
+            <div class="row">
+                <label for="registerPassword">Password:</label>
+                <input type="password" id="registerPassword" minlength="12" maxlength="128" autocomplete="new-password" required>
+            </div>
+            <!-- Submits account registration or switches to the existing-account form. -->
+            <button type="submit">Create account</button>
+            <button type="button" id="showLogin">Already have an account? Sign in</button>
+        </form>
+        <!-- Collects credentials for an existing account when the visitor chooses sign-in. -->
+        <form id="loginForm" hidden>
+            <!-- Collects the email address used by the account. -->
+            <div class="row">
+                <label for="loginEmail">Email:</label>
+                <input type="email" id="loginEmail" maxlength="254" autocomplete="email" required>
+            </div>
+            <!-- Collects the password for the existing account. -->
+            <div class="row">
+                <label for="loginPassword">Password:</label>
+                <input type="password" id="loginPassword" maxlength="128" autocomplete="current-password" required>
+            </div>
+            <!-- Submits sign-in or switches back to account registration. -->
+            <button type="submit">Sign in</button>
+            <button type="button" id="showRegister">Create a new account</button>
+        </form>
+        <!-- Signs the current account out when the profile script enables this control. -->
+        <button type="button" id="logoutButton" hidden>Sign out</button>
+    </section>
 
+    <!-- Lets signed-in visitors create a room from a question topic. -->
+    <section class="profile-panel">
+        <h2>Start a public room</h2>
+        <p>Post a question as a room topic. Share its invite link so other people can join.</p>
+        <!-- Sends the room topic to rooms.js for creation. -->
+        <form id="createRoomForm">
+            <!-- Accepts the topic that identifies the public room. -->
+            <div class="row">
+                <label for="roomQuestion">Question:</label>
+                <input type="text" id="roomQuestion" maxlength="100" required>
+            </div>
+            <!-- Creates the room after the visitor is signed in. -->
+            <button type="submit">Create room</button>
+        </form>
+        <!-- Shows room-loading, sign-in, success, and error messages. -->
+        <p id="roomStatus" role="status">Loading public rooms...</p>
+    </section>
+
+    <!-- Displays rooms that currently have the most connected people. -->
+    <section class="profile-panel">
+        <h2>Most active right now</h2>
+        <!-- rooms.js inserts the active-room cards here. -->
+        <div id="activeRooms"></div>
+    </section>
+
+    <!-- Displays the rooms ranked by how many messages they contain. -->
+    <section class="profile-panel">
+        <h2>Most messages</h2>
+        <!-- rooms.js inserts the message-ranked cards here. -->
+        <div id="busyRooms"></div>
+    </section>
+
+    <!-- Displays every available public question room. -->
+    <section class="profile-panel">
+        <h2>All public question rooms</h2>
+        <!-- rooms.js inserts the complete room directory here. -->
+        <div id="publicRoomList"></div>
+    </section>
+
+    <!-- Returns to the site's home page. -->
     <p><a href="index.html">Back to Home</a></p>
 
+    <!-- Loads shared account handling before the room page behavior. -->
+    <script src="profile.js"></script>
+    <!-- Loads room creation, room rankings, and invitation-link behavior. -->
+    <script src="rooms.js"></script>
 </body>
 </html>

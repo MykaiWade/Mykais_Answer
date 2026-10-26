@@ -137,3 +137,16 @@
 
 /* The x button inside a tag. No border or fill, so it looks like part of the pill rather than a big button. */
 .tag button { background: none; border: none; color: inherit; cursor: pointer; font-size: 16px; line-height: 1; padding: 0 4px; }
+
+/* Public-room cards keep join and invite actions together. */
+.card button { margin-top: 8px; margin-left: 8px; }
+/* Shows disabled form buttons as unavailable until the user can submit. */
+button:disabled { opacity: 0.6; cursor: wait; }
+/* Makes hidden account forms and controls stay out of the layout. */
+[hidden] { display: none !important; }
+
+/* Stacks only the room-creation fields on narrow screens for easier input. */
+@media (max-width: 480px) {
+    #createRoomForm .row { flex-direction: column; gap: 6px; }
+    #createRoomForm label { width: auto; }
+}
