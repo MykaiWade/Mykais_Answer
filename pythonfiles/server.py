@@ -4,7 +4,7 @@
 #   1. Saves the questions people submit.
 #   2. Finds other people's similar questions that share badges.
 #   3. Runs live chat rooms and saves the messages.
-# Run it with:  python server.py
+# Run it with:  python pythonfiles/server.py
 # Stop it with: Ctrl+C
 # =====================================================================
 
@@ -27,13 +27,13 @@ from pydantic import BaseModel, Field        # Describes what data a form submis
 # Creates the web app. Every "@app..." line below attaches a feature to it.
 app = FastAPI()
 
-# The folder this file is in. Pages and the database are found relative to it.
-# CHANGE: normally leave this alone.
-HERE = os.path.dirname(os.path.abspath(__file__))
+# The project folder. This file lives one level below it in pythonfiles.
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # Where the database lives. It is created automatically the first time you run the server.
 # CHANGE: rename "chat.db" if you want. If you delete the file, ALL questions and messages are erased.
-DB_FILE = os.path.join(HERE, "chat.db")
+DB_FILE = os.path.join(ROOT_DIR, "databasefiles", "chat.db")
+os.makedirs(os.path.dirname(DB_FILE), exist_ok=True)
 
 # The only pages visitors are allowed to open. This is a safety list: it stops people from
 # downloading server.py or chat.db through the browser.
@@ -800,12 +800,12 @@ async def chat(ws: WebSocket, room: str):
 
 @app.get("/")   # Visiting just http://yourserver:8000 shows index.html.
 def home():
-    return FileResponse(os.path.join(HERE, "index.html"))
+    return FileResponse(os.path.join(ROOT_DIR, "htmlfiles", "index.html"))
 
 
 @app.get("/{page}.html")   # Visiting /ask.html, /chat.html, etc.
 def page(page: str):
-    path = os.path.join(HERE, page + ".html")
+    path = os.path.join(ROOT_DIR, "htmlfiles", page + ".html")
     # Only allow pages on the PAGES list above, and only if the file really exists.
     if page not in PAGES or not os.path.exists(path):
         raise HTTPException(status_code=404, detail="Page not found.")
@@ -815,16 +815,22 @@ def page(page: str):
 # Serve the stylesheet before uvicorn starts, including when the app is imported.
 @app.get("/styles.css")
 def styles():
-    # Build the stylesheet path from the server folder so it works from any working directory.
-    return FileResponse(os.path.join(HERE, "styles.css"), media_type="text/css")
+    return FileResponse(os.path.join(ROOT_DIR, "cssfiles", "styles.css"), media_type="text/css")
 
 # Extra files the browser may download besides pages. Like PAGES, this is a safety list.
 # CHANGE: add each browser asset here; rooms.js supplies public-room listing and creation behavior.
-PUBLIC_FILES = {"badges.txt", "badges.js", "ask.js", "profile.js", "chat.js", "rooms.js"}  # Allows the room script to load.
+PUBLIC_FILES = {
+    "badges.txt": os.path.join("textfiles", "badges.txt"),
+    "badges.js": os.path.join("javascriptfiles", "badges.js"),
+    "ask.js": os.path.join("javascriptfiles", "ask.js"),
+    "profile.js": os.path.join("javascriptfiles", "profile.js"),
+    "chat.js": os.path.join("javascriptfiles", "chat.js"),
+    "rooms.js": os.path.join("javascriptfiles", "rooms.js"),
+}  # Only these files are available to browser pages.
 
 @app.get("/{name}")   # Matches approved browser assets like /badges.js and /profile.js.
 def public_file(name: str):
-    path = os.path.join(HERE, name)
+    path = os.path.join(ROOT_DIR, PUBLIC_FILES[name]) if name in PUBLIC_FILES else ""
     # Anything not on the list (server.py, chat.db) gets a 404, so nobody can download them.
     if name not in PUBLIC_FILES or not os.path.exists(path):
         raise HTTPException(status_code=404, detail="Not found.")

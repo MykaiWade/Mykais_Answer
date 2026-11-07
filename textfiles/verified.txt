@@ -1,0 +1,10 @@
+// file that holds everyone name and if they are verifed. 
+// With the format "First Name Last Name" being someone and a # a pound at the end meaning they are verifed.
+// 
+
+Erica Concepcion 1 #
+Ruben Cerpa-Melendez 2 #
+Noah Callender 3 #
+Jalen Surles 4 #
+Mykai Wade 5 #
+
