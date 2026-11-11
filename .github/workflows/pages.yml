@@ -1,0 +1,85 @@
+name: Publish GitHub Pages preview
+
+# Rebuild the preview after each push; workflow_dispatch also enables manual runs.
+on:
+  push:
+  workflow_dispatch:
+
+# GitHub Pages deployment requires these permissions; do not broaden them unnecessarily.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Keep only one deployment running; a newer push replaces an outdated preview build.
+concurrency:
+  group: github-pages
+  cancel-in-progress: true
+
+jobs:
+  # Copy the static site into _site and upload it for the deploy job.
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+      - name: Build static preview
+        run: |
+          # Pages serves this output folder. Keep the HTML and assets at its root because
+          # the pages refer to styles.css, badges.txt, and each other by root-level names.
+          mkdir -p _site
+
+          # List only pages intended for the public preview; do not copy the server or database.
+          cp htmlfiles/index.html htmlfiles/ask.html htmlfiles/chat.html htmlfiles/about.html htmlfiles/ask-mykai.html _site/
+          cp cssfiles/styles.css _site/styles.css
+          cp textfiles/badges.txt _site/badges.txt
+
+          # These pages normally load scripts that call the Python API. Remove those scripts
+          # from the published copies, then explain the preview limitation and block form submits.
+          for page in _site/*.html; do
+            # The HTML source remains unchanged; only the Pages copy loses its backend scripts.
+            sed -i '/<script src=/d' "$page"
+          done
+
+          # Change the message here if you want different wording or styling for the preview notice.
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          preview_notice = (
+              '<aside role="note" style="display:block;background:#fff3cd;color:#4b3b00;'
+              'border:1px solid #d6a900;padding:10px 12px;margin:0 0 16px;border-radius:6px;'
+              'font-size:14px">GitHub Pages preview only: forms, accounts, questions, rooms, '
+              'and chat need the Python server.</aside>'
+          )
+          disable_forms = (
+              '<script>document.addEventListener("submit",function(event){'
+              'event.preventDefault();event.stopImmediatePropagation();},true);</script>'
+          )
+
+          for page in Path("_site").glob("*.html"):
+              html = page.read_text(encoding="utf-8")
+              html = re.sub(r"<body>", "<body>" + preview_notice + disable_forms, html, count=1)
+              page.write_text(html, encoding="utf-8")
+          PY
+
+          # Prevent GitHub Pages from applying Jekyll processing to the preview files.
+          touch _site/.nojekyll
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+          # Publish the artifact from build; the URL appears in the Actions run and Pages settings.
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

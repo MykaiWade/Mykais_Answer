@@ -52,3 +52,15 @@ Chat rooms include an experimental audio/video calling prototype for up to four 
 From the project folder, start the server with `python pythonfiles/server.py` and open `http://127.0.0.1:8000`.
 
 Files are grouped by type: website pages are in `htmlfiles`, JavaScript in `javascriptfiles`, stylesheets in `cssfiles`, text files in `textfiles`, the server in `pythonfiles`, and the saved database in `databasefiles`. The server uses these paths while keeping the website URLs unchanged.
+
+## GitHub Pages preview
+
+GitHub Pages can show a static preview of the site, but it cannot run the Python server. The preview includes the home, ask, chat, about, and Ask Mykai pages with their shared stylesheet. Account, question, room, and chat features are unavailable there, and form submissions are disabled. The database and server are not published.
+
+To publish the preview:
+
+1. Push this repository to GitHub.
+2. In the repository, open **Settings > Pages** and set the build and deployment source to **GitHub Actions**.
+3. Open the **Actions** tab and wait for **Publish GitHub Pages preview** to finish. The workflow runs on pushes and can also be started manually.
+
+The deployed address will appear in the workflow run and under **Settings > Pages**. Run the Python server locally to use the full website.
