@@ -47,12 +47,6 @@ Before allowing other devices or internet users to sign in, put the site behind 
 
 Chat rooms include an experimental audio/video calling prototype for up to four people. Calls use browser WebRTC in a peer-to-peer mesh, so each browser sends media to every other participant; call quality can drop as the group grows. The server only relays call setup messages and does not record call media. Camera and microphone access requires HTTPS (localhost is allowed for local testing). A public STUN server helps browsers find a direct connection, but some networks require a TURN relay; calls are not guaranteed to connect on every network. For larger groups, use a media server (SFU) rather than increasing the prototype limit.
 
-## Running the site
-
-From the project folder, start the server with `python pythonfiles/server.py` and open `http://127.0.0.1:8000`.
-
-Files are grouped by type: website pages are in `htmlfiles`, JavaScript in `javascriptfiles`, stylesheets in `cssfiles`, text files in `textfiles`, the server in `pythonfiles`, and the saved database in `databasefiles`. The server uses these paths while keeping the website URLs unchanged.
-
 ## GitHub Pages preview
 
 GitHub Pages can show a static preview of the site, but it cannot run the Python server. The preview includes the home, ask, chat, about, and Ask Mykai pages with their shared stylesheet. Account, question, room, and chat features are unavailable there, and form submissions are disabled. The database and server are not published.
