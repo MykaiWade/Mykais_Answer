@@ -46,8 +46,6 @@ jobs:
           for page in _site/*.html; do
             # The HTML source remains unchanged; only the Pages copy loses backend scripts.
             sed -i '/<script src=/ { /badge-picker.js/ b; /badges.js/ b; d; }' "$page"
-                        'font-size:14px">GitHub Pages preview: badge menus work; accounts, question results, '
-                        'rooms, and chat need the Python server.</aside>'
           done
 
           # Change the message here if you want different wording or styling for the preview notice.
