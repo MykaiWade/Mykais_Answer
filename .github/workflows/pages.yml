@@ -31,10 +31,11 @@ jobs:
           # the pages refer to styles.css, badges.txt, and each other by root-level names.
           mkdir -p _site
 
-          # List only pages intended for the public preview; do not copy the server or database.
-          cp htmlfiles/index.html htmlfiles/ask.html htmlfiles/chat.html htmlfiles/about.html htmlfiles/ask-mykai.html _site/
-          cp cssfiles/styles.css _site/styles.css
-          cp textfiles/badges.txt _site/badges.txt
+          # Pages and assets now live at the repository root. List only public HTML pages;
+          # intentionally leave out server.py, chat.db, and other private/runtime files.
+          cp index.html ask.html chat.html about.html ask-mykai.html _site/
+          cp styles.css _site/styles.css
+          cp badges.txt _site/badges.txt
 
           # These pages normally load scripts that call the Python API. Remove those scripts
           # from the published copies, then explain the preview limitation and block form submits.
@@ -72,7 +73,7 @@ jobs:
         with:
           path: _site
 
-          # Publish the artifact from build; the URL appears in the Actions run and Pages settings.
+  # Publish the artifact from build; the URL appears in the Actions run and Pages settings.
   deploy:
     environment:
       name: github-pages
