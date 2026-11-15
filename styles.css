@@ -1,3 +1,8 @@
+/*
+ * - Styles the shared layout and controls used by the HTML pages.
+ * - Connects to index.html, ask.html, ask-mykai.html, chat.html, about.html, and video-test.html.
+ */
+
 /* The whole page.
            font-family = the font. Try Georgia or Verdana.
            background = page color. Try #eaf4fb (lighter) or #aed6f1 (stronger).

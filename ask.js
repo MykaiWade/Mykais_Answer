@@ -1,5 +1,6 @@
-/* QUESTION FORM
-   Sends a question with its badges and shows similar questions from the server.
+/*
+ * - Submits questions and badges, then displays server-generated matches.
+ * - Connects ask.html inputs to profile.js, badge-picker.js, and server.py's question API.
 */
 
 var askForm = document.getElementById("askForm");

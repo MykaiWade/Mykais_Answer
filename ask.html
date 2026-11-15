@@ -1,4 +1,8 @@
 <!DOCTYPE html>
+<!--
+- Collects questions, descriptions, and badges, then displays matching questions.
+- Uses styles.css, profile.js, badge-picker.js, badges.js, and ask.js; ask.js calls the server API.
+-->
 <!-- Tells the browser this is a modern HTML page. Always the first line. -->
 <html lang="en">
 <!-- lang="en" = the page is in English. Change it (like "es") if you switch languages. -->
@@ -90,19 +94,19 @@
         <div class="row">
             <label for="major">Major badge:</label>
             <!-- The first option is the starting text. CHANGE: the wording. -->
-            <select id="major">
+            <select id="major" data-badge-major>
                 <option value="">Choose a major badge</option>
             </select>
         </div>
  
         <!-- Row 4: the Minor badge menu. It stays invisible until a major badge is picked. -->
-        <div class="row" id="minorRow" style="display: none;">
+        <div class="row" id="minorRow" data-badge-minor-row hidden>
             <label for="minor">Minor badges:</label>
-            <select id="minor"></select>
+            <select id="minor" data-badge-minor></select>
         </div>
  
         <!-- Picked minor badges show up here as buttons. Click one to remove it. -->
-        <div id="picked"></div>
+        <div id="picked" data-badge-picked></div>
  
         <!-- The Submit button. type="submit" makes it send the form. CHANGE: edit the word "Submit". -->
         <button type="submit">Submit</button>
@@ -115,6 +119,8 @@
     <p><a href="index.html">Back to Home</a></p>
  
     <script src="profile.js"></script>
+    <!-- Loads the shared major/minor picker before Ask reads its selected badges. -->
+    <script src="badge-picker.js"></script>
     <!-- Loads the badge menus before ask.js uses them. -->
     <script src="badges.js"></script>
     <!-- Loads the submit and match code. -->

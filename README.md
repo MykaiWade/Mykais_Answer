@@ -39,6 +39,8 @@ People can view question matches and chat history without an account. An account
 
 The Chat page lists saved conversations for the signed-in profile, with the most recent message and a link to reopen each room. A reply from another person is identified in the list.
 
+Questions submitted on Ask or created on Ask Mykai are public, including their descriptions and badges. Chat and Ask Mykai let visitors choose a major badge and optional minor badges to find matching public questions, then open a question to read its description and join its room. Do not include private information in a public question or description.
+
 The profile name and email address are not verified. The name is public; the email is only used to sign in. Passwords are stored as salted PBKDF2 hashes, and browsers use HTTP-only, same-site session cookies that are marked Secure when the site uses HTTPS. There is no password reset yet, so users must save their password safely. Accounts have a 30-day sign-in cookie.
 
 When an existing browser-only profile is upgraded to an account in the same browser, its saved questions and chat history stay connected to the account.

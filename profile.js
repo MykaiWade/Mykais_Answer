@@ -1,6 +1,6 @@
-/* ACCOUNT SIGN-IN
-   The server keeps the account and signs this browser in with an HttpOnly cookie.
-   The browser keeps only the display name in memory, not the password or session token.
+/*
+ * - Handles account registration, sign-in, sign-out, and current-profile state.
+ * - Connects account forms in ask.html, ask-mykai.html, and chat.html to server.py's auth API.
 */
 (function () {
     var profile = null;

@@ -1,4 +1,8 @@
 <!DOCTYPE html>
+<!--
+- Lets visitors browse public questions by badge and create tagged question rooms.
+- Uses styles.css, profile.js, badge-picker.js, and rooms.js; rooms.js reads and writes through server.py.
+-->
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -62,16 +66,65 @@
         <button type="button" id="logoutButton" hidden>Sign out</button>
     </section>
 
-    <!-- Lets signed-in visitors create a room from a question topic. -->
+    <!-- Visitors choose a badge before browsing; no public questions are listed before a choice. -->
+    <section class="profile-panel">
+        <h2>Find questions by badge</h2>
+        <div id="directoryBadgePicker" class="badge-picker">
+            <!-- This selector reuses the badge catalog and controls from the Ask page. -->
+            <div class="row">
+                <label for="directoryMajor">Major Badge:</label>
+                <select id="directoryMajor" data-badge-major>
+                    <option value="">Choose a major badge</option>
+                </select>
+            </div>
+            <!-- Minor options are filled from badges.txt after a major is selected. -->
+            <div class="row" id="directoryMinorRow" data-badge-minor-row hidden>
+                <label for="directoryMinor">Minor badges:</label>
+                <select id="directoryMinor" data-badge-minor>
+                    <option value="">Add a minor badge</option>
+                </select>
+            </div>
+            <!-- Shows removable minor badges selected for browsing. -->
+            <div id="directoryPicked" data-badge-picked></div>
+        </div>
+        <div class="row">
+            <label for="publicQuestionSearch">Search questions:</label>
+            <input type="search" id="publicQuestionSearch" placeholder="Question text (optional)" autocomplete="off">
+        </div>
+        <p id="directoryStatus" role="status">Choose a major badge to find questions.</p>
+    </section>
+
+    <!-- Lets signed-in visitors create and tag a public question room. -->
     <section class="profile-panel">
         <h2>Start a public room</h2>
-        <p>Post a question as a room topic. Share its invite link so other people can join.</p>
+        <p>Questions, descriptions, and badges are public. Share the room link so others can join.</p>
         <!-- Sends the room topic to rooms.js for creation. -->
         <form id="createRoomForm">
             <!-- Accepts the topic that identifies the public room. -->
             <div class="row">
                 <label for="roomQuestion">Question:</label>
                 <input type="text" id="roomQuestion" maxlength="100" required>
+            </div>
+            <!-- Saves optional context that visitors can open from the question directory. -->
+            <div class="row">
+                <label for="roomDescription">Description:</label>
+                <textarea id="roomDescription" maxlength="200"></textarea>
+            </div>
+            <!-- The shared picker saves the major and selected minors on this public question. -->
+            <div id="roomBadgePicker" class="badge-picker">
+                <div class="row">
+                    <label for="roomMajor">Major Badge:</label>
+                    <select id="roomMajor" data-badge-major required>
+                        <option value="">Choose a major badge</option>
+                    </select>
+                </div>
+                <div class="row" id="roomMinorRow" data-badge-minor-row hidden>
+                    <label for="roomMinor">Minor badges:</label>
+                    <select id="roomMinor" data-badge-minor>
+                        <option value="">Add a minor badge</option>
+                    </select>
+                </div>
+                <div id="roomPicked" data-badge-picked></div>
             </div>
             <!-- Creates the room after the visitor is signed in. -->
             <button type="submit">Create room</button>
@@ -80,24 +133,23 @@
         <p id="roomStatus" role="status">Loading public rooms...</p>
     </section>
 
-    <!-- Displays rooms that currently have the most connected people. -->
-    <section class="profile-panel">
+    <!-- Badge-selected rooms are rendered into these lists after the visitor chooses a major badge. -->
+    <section id="activeRoomPanel" class="profile-panel" hidden>
         <h2>Most active right now</h2>
         <!-- rooms.js inserts the active-room cards here. -->
         <div id="activeRooms"></div>
     </section>
 
     <!-- Displays the rooms ranked by how many messages they contain. -->
-    <section class="profile-panel">
+    <section id="busyRoomPanel" class="profile-panel" hidden>
         <h2>Most messages</h2>
         <!-- rooms.js inserts the message-ranked cards here. -->
         <div id="busyRooms"></div>
     </section>
 
-    <!-- Displays every available public question room. -->
-    <section class="profile-panel">
-        <h2>All public question rooms</h2>
-        <!-- rooms.js inserts the complete room directory here. -->
+    <!-- Lists only rooms matching the selected major and optional minor badges. -->
+    <section id="publicRoomPanel" class="profile-panel" hidden>
+        <h2>Questions in these badges</h2>
         <div id="publicRoomList"></div>
     </section>
 
@@ -106,6 +158,8 @@
 
     <!-- Loads shared account handling before the room page behavior. -->
     <script src="profile.js"></script>
+    <!-- Loads the same reusable badge controls used on Ask and Chat. -->
+    <script src="badge-picker.js"></script>
     <!-- Loads room creation, room rankings, and invitation-link behavior. -->
     <script src="rooms.js"></script>
 </body>

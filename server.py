@@ -1,12 +1,6 @@
-# =====================================================================
-# server.py - the "brain" of the site.
-# It does three jobs:
-#   1. Saves the questions people submit.
-#   2. Finds other people's similar questions that share badges.
-#   3. Runs live chat rooms and saves the messages.
-# Run it with:  python server.py
-# Stop it with: Ctrl+C
-# =====================================================================
+# - Runs the FastAPI app for accounts, public questions, badge matching, and live chat.
+# - Serves the HTML/CSS/JavaScript files and reads/writes chat.db for saved data.
+# - Start locally with: python server.py (press Ctrl+C to stop).
 
 # --- Imports: tools this file borrows. You only add one if you use a new tool. ---
 import os        # Works with file paths and folders.
@@ -342,6 +336,8 @@ class NewQuestion(BaseModel):
 
 class NewPublicRoom(BaseModel):  # Validates the question submitted to create a public room.
     question: str  # Holds the required room topic supplied by the browser.
+    description: str = ""  # Holds optional context that is public with the question.
+    tags: list[str] = Field(default_factory=list)  # Holds the selected major and minor badges.
 
 
 @app.post("/api/questions")   # This is the address ask.html sends the form to.
@@ -418,6 +414,8 @@ def add_question(q: NewQuestion, request: Request):
 @app.post("/api/public-rooms")  # Exposes the authenticated endpoint for creating public rooms.
 def create_public_room(room: NewPublicRoom, request: Request):
     question = room.question.strip()[:MAX_QUESTION]  # Trims the topic and enforces the question length limit.
+    description = room.description.strip()[:MAX_DESCRIPTION]  # Applies the shared public-description limit.
+    tags = list(dict.fromkeys(tag.strip().upper()[:64] for tag in room.tags[:20] if tag.strip()))  # Normalizes unique badge names.
     if not question:
         raise HTTPException(status_code=400, detail="A room question is required.")  # Rejects blank topics.
 
@@ -428,8 +426,8 @@ def create_public_room(room: NewPublicRoom, request: Request):
         raise HTTPException(status_code=401, detail="Sign in before creating a room.")  # Requires a signed-in creator.
     cur = con.execute(  # Stores the topic as a question so it has a stable database ID.
         "INSERT INTO questions (user_id, question, description, created, tags) "
-        "VALUES (?, ?, '', ?, '[]')",
-        (profile["user_id"], question, time.time()),
+        "VALUES (?, ?, ?, ?, ?)",
+        (profile["user_id"], question, description, time.time(), json.dumps(tags)),
     )
     question_id = cur.lastrowid  # Uses the saved question ID as the room identifier.
     con.commit()  # Persists the newly created public room topic.
@@ -441,7 +439,7 @@ def create_public_room(room: NewPublicRoom, request: Request):
 async def public_rooms():
     con = db()  # Opens the database to read all room topics and saved message totals.
     rows = con.execute(  # Joins room topics to saved messages so quiet rooms remain visible too.
-        "SELECT questions.id, questions.question, questions.created, "
+        "SELECT questions.id, questions.question, questions.description, questions.tags, questions.created, "
         "COUNT(messages.id) AS message_count "
         "FROM questions LEFT JOIN messages "
         "ON messages.room = 'question-' || questions.id "
@@ -457,6 +455,8 @@ async def public_rooms():
             "id": row["id"],  # Includes the source question ID.
             "room": room,  # Includes the key used by the chat page.
             "question": row["question"],  # Includes the room's displayed topic.
+            "description": row["description"] or "",  # Makes the question description public in the chat directory.
+            "tags": json.loads(row["tags"] or "[]"),  # Groups public questions by every badge they use.
             "created": row["created"],  # Provides a recency tie-breaker for room rankings.
             "message_count": row["message_count"],  # Reports the total number of saved messages.
             "active_people": len(set(members.values())),  # Counts unique connected profiles and guests.
@@ -819,7 +819,7 @@ def styles():
 
 # Extra files the browser may download besides pages. Like PAGES, this is a safety list.
 # CHANGE: add each browser asset here; rooms.js supplies public-room listing and creation behavior.
-PUBLIC_FILES = {"badges.txt", "badges.js", "ask.js", "profile.js", "chat.js", "rooms.js"}  # Allows the room script to load.
+PUBLIC_FILES = {"badges.txt", "badge-picker.js", "badges.js", "ask.js", "profile.js", "chat.js", "rooms.js"}  # Allows pages to load their public scripts.
 
 @app.get("/{name}")   # Matches approved browser assets like /badges.js and /profile.js.
 def public_file(name: str):
