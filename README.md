@@ -60,3 +60,13 @@ To publish the preview:
 3. Open the **Actions** tab and wait for **Publish GitHub Pages preview** to finish. The workflow runs on pushes and can also be started manually.
 
 The deployed address will appear in the workflow run and under **Settings > Pages**. Run the Python server locally to use the full website.
+
+## Start the full website
+
+On the Windows computer that hosts the site, open PowerShell in this repository and run:
+
+```powershell
+python startup.py
+```
+
+This starts the Python website and its Cloudflare Tunnel. Keep the PowerShell window open while people use the site; press **Ctrl+C** to stop both. The computer must stay on and connected to the internet.
