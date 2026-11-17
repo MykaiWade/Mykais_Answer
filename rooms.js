@@ -1,24 +1,46 @@
-/* PUBLIC QUESTION ROOMS
-   Lists joinable question chats and their live activity and message totals.
+/*
+ * - Creates public questions with badges and filters the room directory by badge and text.
+ * - Connects ask-mykai.html and badge-picker.js to server.py's public-room API.
 */
 (function () {
     var createForm = document.getElementById("createRoomForm"); // Finds the form used to create public question rooms.
     var questionInput = document.getElementById("roomQuestion"); // Finds the field containing the new room topic.
+    var descriptionInput = document.getElementById("roomDescription"); // Finds the optional public question description.
     var status = document.getElementById("roomStatus"); // Finds the live status and error message area.
+    var directoryStatus = document.getElementById("directoryStatus"); // Finds the public question filter status.
     var activeRooms = document.getElementById("activeRooms"); // Finds the list of rooms with connected visitors.
     var busyRooms = document.getElementById("busyRooms"); // Finds the list of rooms ranked by saved messages.
     var roomList = document.getElementById("publicRoomList"); // Finds the complete public room directory.
+    var activeRoomPanel = document.getElementById("activeRoomPanel"); // Shows activity only after a badge is selected.
+    var busyRoomPanel = document.getElementById("busyRoomPanel"); // Shows message rankings only after a badge is selected.
+    var publicRoomPanel = document.getElementById("publicRoomPanel"); // Shows matching questions only after a badge is selected.
+    var directorySearch = document.getElementById("publicQuestionSearch"); // Finds questions by optional text.
+    var directoryPicker = window.BadgePicker.mount(document.getElementById("directoryBadgePicker")); // Filters questions by badge.
+    var createPicker = window.BadgePicker.mount(createForm); // Assigns badges to a newly created question.
+    var allRooms = []; // Caches public questions so filter changes do not need another server request.
     var submitButton = createForm.querySelector("button[type='submit']"); // Gets the room creation control.
     submitButton.disabled = true; // Prevents submission until the account status is known.
 
-    // Builds a room card with its topic, activity, join link, and shareable invitation.
+    // Builds a question card with its expandable description, badges, activity, and room links.
     function makeRoomCard(room) {
         var card = document.createElement("article"); // Creates a semantic card for one public room.
         card.className = "card"; // Applies the site's existing card styling.
 
-        var heading = document.createElement("strong"); // Creates the visible room-topic heading.
+        var questionDetails = document.createElement("details"); // Makes the description available on demand.
+        var summary = document.createElement("summary"); // Creates the clickable question heading.
+        var heading = document.createElement("strong"); // Styles the question like other room-card headings.
         heading.textContent = room.question; // Uses text content to display the topic safely.
-        card.appendChild(heading); // Adds the topic heading to the room card.
+        summary.appendChild(heading); // Adds the question to the expandable heading.
+        questionDetails.appendChild(summary); // Adds the expandable heading to the details section.
+
+        var description = document.createElement("p"); // Creates the optional public question description.
+        description.textContent = room.description || "No description was provided."; // Avoids rendering user text as HTML.
+        questionDetails.appendChild(description); // Shows the description after opening the question.
+
+        var badges = document.createElement("span"); // Creates the question's badge summary.
+        badges.textContent = "Badges: " + (room.tags.length ? room.tags.join(", ") : "None");
+        questionDetails.appendChild(badges); // Keeps assigned badges visible with the description.
+        card.appendChild(questionDetails); // Adds the expandable question details to the room card.
 
         var details = document.createElement("span"); // Creates a summary of room activity.
         details.textContent = room.active_people + " active " // Shows how many unique visitors are connected.
@@ -67,7 +89,55 @@
         });
     }
 
-    // Loads room totals and renders the active, most-messaged, and all-room lists.
+    // Applies the selected major, optional minors, and question text to the cached public list.
+    function renderSelectedRooms() {
+        var major = directoryPicker.getMajor();
+        var selectedMinors = directoryPicker.getMinorTags();
+        var query = directorySearch.value.trim().toLocaleUpperCase();
+        var hasSelection = Boolean(major);
+        activeRoomPanel.hidden = !hasSelection;
+        busyRoomPanel.hidden = !hasSelection;
+        publicRoomPanel.hidden = !hasSelection;
+
+        if (!hasSelection) {
+            directoryStatus.textContent = "Choose a major badge to find questions.";
+            return;
+        }
+
+        var matchingRooms = allRooms.filter(function (room) {
+            var tags = Array.isArray(room.tags) ? room.tags : [];
+            if (tags.indexOf(major) === -1) {
+                return false;
+            }
+            if (selectedMinors.length
+                    && !selectedMinors.some(function (badge) { return tags.indexOf(badge) !== -1; })) {
+                return false;
+            }
+            var searchable = (room.question + " " + tags.join(" ")).toLocaleUpperCase();
+            return !query || searchable.indexOf(query) !== -1;
+        });
+
+        var byActive = matchingRooms.slice().sort(function (a, b) { // Ranks by visitors, messages, then recency.
+            return b.active_people - a.active_people
+                || b.message_count - a.message_count
+                || b.created - a.created;
+        });
+        var byMessages = matchingRooms.slice().sort(function (a, b) { // Ranks by messages, visitors, then recency.
+            return b.message_count - a.message_count
+                || b.active_people - a.active_people
+                || b.created - a.created;
+        });
+        renderRooms(activeRooms,
+            byActive.filter(function (room) { return room.active_people > 0; }).slice(0, 5),
+            "No one is active in a matching room right now.");
+        renderRooms(busyRooms, byMessages.slice(0, 5), "No matching rooms have messages yet.");
+        renderRooms(roomList, byActive, "No questions match those badges and search.");
+        directoryStatus.textContent = matchingRooms.length === 1
+            ? "1 matching public question."
+            : matchingRooms.length + " matching public questions.";
+    }
+
+    // Loads public question details once, then applies the visitor's current badge filter.
     function loadRooms() {
         fetch("/api/public-rooms") // Requests the latest room list and live activity counts.
             .then(function (response) { // Checks the HTTP result before using the response data.
@@ -78,32 +148,13 @@
                     return data; // Passes the public rooms to the rendering step.
                 });
             })
-            .then(function (rooms) { // Sorts and displays successful room results.
-                var byActive = rooms.slice().sort(function (a, b) { // Ranks by active people, messages, then recency.
-                    return b.active_people - a.active_people
-                        || b.message_count - a.message_count
-                        || b.created - a.created;
-                });
-                var byMessages = rooms.slice().sort(function (a, b) { // Ranks by messages, active people, then recency.
-                    return b.message_count - a.message_count
-                        || b.active_people - a.active_people
-                        || b.created - a.created;
-                });
-                renderRooms(activeRooms, // Shows only rooms that currently have visitors.
-                    byActive.filter(function (room) { // Excludes inactive rooms from the live list.
-                        return room.active_people > 0; // Keeps rooms with at least one connected visitor.
-                    }).slice(0, 5),
-                    rooms.length
-                        ? "No one is active in a room right now."
-                        : "No public rooms yet. Create the first one below.");
-                renderRooms(busyRooms, byMessages.slice(0, 5), // Shows the five rooms with the most saved messages.
-                    "No public rooms yet. Create the first one below.");
-                renderRooms(roomList, byActive, // Shows every public room in activity order.
-                    "No public rooms yet. Create the first one below.");
+            .then(function (rooms) { // Stores fresh data and renders only selected-badge questions.
+                allRooms = rooms;
+                renderSelectedRooms();
                 if (status.textContent === "Loading public rooms...") { // Replaces the initial loading message once.
                     status.textContent = rooms.length
-                        ? "Activity refreshes every 10 seconds. Share any room invite link to let others join."
-                        : "No public rooms yet. Sign in to create one.";
+                        ? "Question activity refreshes every 10 seconds."
+                        : "No public questions yet. Sign in to create one.";
                 }
             })
             .catch(function (error) { // Shows network or server errors rather than hiding them.
@@ -117,13 +168,21 @@
             status.textContent = "Create an account or sign in before creating a public room."; // Explains the account requirement.
             return; // Prevents an unauthenticated room-creation request.
         }
+        if (!createPicker.getMajor()) {
+            status.textContent = "Choose a major badge for your question.";
+            return;
+        }
 
         submitButton.disabled = true; // Prevents duplicate submissions while the room is being saved.
         status.textContent = "Creating your public room..."; // Informs the user that creation is in progress.
         fetch("/api/public-rooms", { // Sends the new topic to the authenticated room-creation endpoint.
             method: "POST", // Creates rather than reads a room.
             headers: { "Content-Type": "application/json" }, // Identifies the request body as JSON.
-            body: JSON.stringify({ question: questionInput.value }) // Sends the typed topic to the server.
+            body: JSON.stringify({ // Sends the public topic, description, and selected badges.
+                question: questionInput.value,
+                description: descriptionInput.value,
+                tags: createPicker.getTags()
+            })
         })
             .then(function (response) { // Parses the result and handles server errors.
                 return response.json().then(function (data) { // Reads the returned room details or error message.
@@ -146,6 +205,11 @@
                 submitButton.disabled = false; // Allows another room attempt after an error.
             });
     });
+
+    // Re-filters cached questions as badge or text selections change.
+    directoryPicker.onChange(renderSelectedRooms);
+    directorySearch.addEventListener("input", renderSelectedRooms);
+    renderSelectedRooms();
 
     window.SiteProfile.ready.then(function (profile) { // Enables room creation only after account lookup completes.
         submitButton.disabled = !profile; // Requires an authenticated profile to create a room.

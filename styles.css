@@ -1,3 +1,8 @@
+/*
+ * - Styles the shared layout and controls used by the HTML pages.
+ * - Connects to index.html, ask.html, ask-mykai.html, chat.html, about.html, and video-test.html.
+ */
+
 /* The whole page.
            font-family = the font. Try Georgia or Verdana.
            background = page color. Try #eaf4fb (lighter) or #aed6f1 (stronger).
@@ -80,6 +85,8 @@
         /* Panels for profile setup and the personal chat-room list. */
         .profile-panel { background: white; padding: 14px; margin: 16px 0; border: 1px solid darkblue; border-radius: 8px; }
         .profile-panel h2 { margin-top: 0; }
+        .profile-qr { display: block; width: min(320px, 100%); height: auto; margin: 12px auto; }
+        #qrScannerVideo { display: block; width: min(480px, 100%); background: #111; margin: 12px 0; }
 
         /* The line under the heading showing what the two questions are about.
            font-size = text size. color = gray. margin-bottom = space below it. */

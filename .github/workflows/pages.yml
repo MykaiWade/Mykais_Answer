@@ -1,0 +1,47 @@
+name: Publish GitHub Pages preview
+
+# - Copies the public HTML, stylesheet, and badge catalog into a static Pages artifact.
+# - Deploys that artifact; the Python API and database remain local/server-side.
+# Rebuild the preview after each push; workflow_dispatch also enables manual runs.
+on:
+  push:
+  workflow_dispatch:
+
+# GitHub Pages deployment requires these permissions; do not broaden them unnecessarily.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Keep only one deployment running; a newer push replaces an outdated preview build.
+concurrency:
+  group: github-pages
+  cancel-in-progress: true
+
+jobs:
+  # Copy the static site into _site and upload it for the deploy job.
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+      - name: Build static preview
+        run: python3 build_pages.py --output _site
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  # Publish the artifact from build; the URL appears in the Actions run and Pages settings.
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

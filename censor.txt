@@ -1,0 +1,2 @@
+// file used to show all the banned words used for this website
+// this will not cover all words at all times but will be updated to account for ones used

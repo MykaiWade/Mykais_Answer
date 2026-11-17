@@ -1,6 +1,6 @@
-/* ACCOUNT SIGN-IN
-   The server keeps the account and signs this browser in with an HttpOnly cookie.
-   The browser keeps only the display name in memory, not the password or session token.
+/*
+ * - Handles account registration, sign-in, sign-out, and current-profile state.
+ * - Connects account forms to server.py's auth API and tells profile-page.js when sign-in changes.
 */
 (function () {
     var profile = null;
@@ -9,21 +9,67 @@
     var registerForm = document.getElementById("registerForm");
     var loginForm = document.getElementById("loginForm");
     var logoutButton = document.getElementById("logoutButton");
+    var resendVerificationButton = document.getElementById("resendVerificationButton");
+    var verificationQrImage = document.getElementById("verificationQrImage");
+    var isProfilePage = Boolean(document.getElementById("showProfileQrButton"));
+
+    function memberLabel(realName, accountNumber, verified) {
+        var label = realName || "Unknown member";
+        if (accountNumber !== null && accountNumber !== undefined) {
+            label += " " + accountNumber;
+        }
+        return label + (verified ? " # — Verified" : " — Unverified");
+    }
 
     function showSignedOut() {
         profile = null;
-        status.textContent = "Create an account or sign in before posting or replying.";
+        status.textContent = isProfilePage
+            ? "Sign in or create an account to share or scan contact QR codes."
+            : "Create an account or sign in before posting or replying.";
         registerForm.hidden = false;
         loginForm.hidden = true;
         logoutButton.hidden = true;
+        if (resendVerificationButton) {
+            resendVerificationButton.hidden = true;
+        }
+        if (verificationQrImage) {
+            verificationQrImage.hidden = true;
+        }
     }
 
     function showSignedIn() {
-        status.textContent = "Signed in as " + profile.real_name
-            + (profile.verified ? " — Verified" : " — Unverified");
+        status.textContent = "Signed in as " + memberLabel(
+            profile.real_name,
+            profile.account_number,
+            profile.verified
+        );
         registerForm.hidden = true;
         loginForm.hidden = true;
         logoutButton.hidden = false;
+        if (resendVerificationButton) {
+            resendVerificationButton.hidden = profile.verified;
+        }
+        if (verificationQrImage && profile.verified) {
+            verificationQrImage.hidden = true;
+        }
+    }
+
+    function readApiResponse(response, fallbackMessage) {
+        return response.text().then(function (text) {
+            var data;
+            try {
+                data = JSON.parse(text);
+            } catch (error) {
+                throw new Error(
+                    "The account service returned a webpage instead of JSON (HTTP "
+                    + response.status + "). Check that the server and its /api routes are available."
+                );
+            }
+            if (!response.ok) {
+                throw new Error(data.detail || fallbackMessage);
+            }
+            return data;
+        });
     }
 
     function sendForm(form, url, details) {
@@ -37,23 +83,27 @@
             body: JSON.stringify(details)
         })
             .then(function (response) {
-                return response.json().then(function (data) {
-                    if (!response.ok) {
-                        throw new Error(data.detail || "The account request failed.");
-                    }
-                    return data;
-                });
+                return readApiResponse(response, "The account request failed.");
             })
             .then(function (data) {
                 profile = {
                     user_id: data.user_id,
                     real_name: data.real_name,
+                    account_number: data.account_number,
+                    public_id: data.public_id,
                     verified: data.verified
                 };
                 oldProfileId = null;
                 localStorage.removeItem("user_id");
                 form.reset();
                 showSignedIn();
+                if (data.verification_email_sent) {
+                    status.textContent += " A verification QR code was sent to your email.";
+                } else if (data.verification_email_sent === false) {
+                    status.textContent +=
+                        " Your account was created, but the verification email could not be sent. "
+                        + "Check the server email settings, then request another QR code here.";
+                }
                 window.dispatchEvent(new CustomEvent("profilechange", { detail: profile }));
             })
             .catch(function (error) {
@@ -74,11 +124,12 @@
             if (!response.ok) {
                 throw new Error("Your sign-in could not be checked.");
             }
-            return response.json().then(function (data) {
-                profile = data;
-                showSignedIn();
-                return profile;
-            });
+            return readApiResponse(response, "Your sign-in could not be checked.")
+                .then(function (data) {
+                    profile = data;
+                    showSignedIn();
+                    return profile;
+                });
         })
         .catch(function (error) {
             status.textContent = error.message;
@@ -131,9 +182,34 @@
             });
     });
 
+    if (resendVerificationButton) {
+        resendVerificationButton.addEventListener("click", function () {
+                resendVerificationButton.disabled = true;
+                status.textContent = "Sending a new verification QR code...";
+                fetch("/api/verification/resend", { method: "POST" })
+                    .then(function (response) {
+                        return readApiResponse(response, "A new QR code could not be sent.");
+                    })
+                    .then(function (data) {
+                        status.textContent = data.message;
+                        if (verificationQrImage && data.qr_code) {
+                            verificationQrImage.src = "data:image/png;base64," + data.qr_code;
+                            verificationQrImage.hidden = false;
+                        }
+                    })
+                    .catch(function (error) {
+                        status.textContent = error.message;
+                    })
+                    .finally(function () {
+                        resendVerificationButton.disabled = false;
+                });
+            });
+    }
+
     /* Other page scripts wait for account status and read the current public profile. */
     window.SiteProfile = {
         ready: ready,
-        current: function () { return profile; }
+        current: function () { return profile; },
+        memberLabel: memberLabel
     };
 })();

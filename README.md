@@ -31,18 +31,26 @@ WORK WITH ONE ANOTHER TO GET WHAT YOU THINK NEEDS TO GET DONE, DONE AS SOON AS P
 
 PEOPLE MYKAI WORKED WITH:
 
+ACCOUNT SIGN-IN AND EMAIL
+
+Open the Profile page to create an account or sign in. Use the same email address
+and password you entered when creating the account. Passwords must be 12-128
+characters; the email address must be one you can access to receive verification.
+
+For signup verification emails, copy `.env.example` to `.env` and replace its
+SMTP placeholders with your email provider's SMTP settings. Do not put a real
+password in `email.txt` or commit `.env`. If mail is temporarily unavailable,
+the account can still be created and signed into, but it remains unverified
+until you configure email and request another verification QR from the Profile
+page.
+
+`email.txt` is only a sign-in example; it is not read by the app and does not
+create an account.
+
+To remove someone from the verified-member roster, delete their entire line
+from `verified.txt` and save the file before restarting the server. Startup
+will not recreate a removed line from the account database; that account will
+be treated as unverified. Removing a roster line does not delete the person's
+login or other data from the database.
 
 
-PROFILES:
-
-People can view question matches and chat history without an account. An account is required to post a question or send a chat reply. Create an account with a public name, email, and password, or sign in with an existing email and password.
-
-The Chat page lists saved conversations for the signed-in profile, with the most recent message and a link to reopen each room. A reply from another person is identified in the list.
-
-The profile name and email address are not verified. The name is public; the email is only used to sign in. Passwords are stored as salted PBKDF2 hashes, and browsers use HTTP-only, same-site session cookies that are marked Secure when the site uses HTTPS. There is no password reset yet, so users must save their password safely. Accounts have a 30-day sign-in cookie.
-
-When an existing browser-only profile is upgraded to an account in the same browser, its saved questions and chat history stay connected to the account.
-
-Before allowing other devices or internet users to sign in, put the site behind HTTPS. The built-in development server uses plain HTTP; do not send passwords over a network until HTTPS is configured.
-
-Chat rooms include an experimental audio/video calling prototype for up to four people. Calls use browser WebRTC in a peer-to-peer mesh, so each browser sends media to every other participant; call quality can drop as the group grows. The server only relays call setup messages and does not record call media. Camera and microphone access requires HTTPS (localhost is allowed for local testing). A public STUN server helps browsers find a direct connection, but some networks require a TURN relay; calls are not guaranteed to connect on every network. For larger groups, use a media server (SFU) rather than increasing the prototype limit.

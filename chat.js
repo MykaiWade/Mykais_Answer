@@ -1,6 +1,6 @@
-/* CHAT PAGE
-   Shows the selected conversation and lists chats connected to this profile.
-   Anyone can read history; only a signed-in profile can send messages.
+/*
+ * - Filters public question rooms by badge and manages chat history, live messages, and calls.
+ * - Connects chat.html to profile.js and server.py's question, chat, and WebSocket endpoints.
 */
 (function () {
     var topic = document.getElementById("topic");
@@ -11,6 +11,14 @@
     var sendButton = sendForm.querySelector("button[type='submit']");
     var chatList = document.getElementById("chatList");
     var chatListStatus = document.getElementById("chatListStatus");
+    // These controls filter only public questions; private match chats remain in their own list.
+    var questionSearch = document.getElementById("questionSearch");
+    var questionDirectory = document.getElementById("questionDirectory");
+    var questionDirectoryStatus = document.getElementById("questionDirectoryStatus");
+    var questionBadgePicker = window.BadgePicker.mount(
+        document.getElementById("questionBadgeFilter")
+    );
+    var publicQuestions = [];
     var callSection = document.getElementById("callSection");
     var callStatus = document.getElementById("callStatus");
     var joinCallButton = document.getElementById("joinCallButton");
@@ -211,8 +219,17 @@
             showCallStatus("Wait for the chat connection before joining a call.");
             return;
         }
-        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        if (window.isSecureContext === false) {
             showCallStatus("Camera and microphone access requires HTTPS (or localhost).");
+            return;
+        }
+        if (!navigator.mediaDevices
+                || typeof navigator.mediaDevices.getUserMedia !== "function") {
+            showCallStatus(
+                "This browser does not provide camera and microphone access. "
+                + "Open the site in Safari or Chrome instead of an in-app browser, "
+                + "and make sure the browser is up to date."
+            );
             return;
         }
         if (typeof RTCPeerConnection !== "function") {
@@ -297,8 +314,11 @@
         }
 
         var author = document.createElement("strong");
-        author.textContent = (message.real_name || "Unknown member")
-            + (message.verified ? " — Verified" : " — Unverified");
+        author.textContent = window.SiteProfile.memberLabel(
+            message.real_name,
+            message.account_number,
+            message.verified
+        );
         bubble.appendChild(author);
 
         var body = document.createElement("div");
@@ -369,6 +389,118 @@
                 chatListStatus.textContent = error.message;
             });
     }
+
+    // Shows no questions until a major is chosen, then groups matches under selected minor badges.
+    function renderQuestionDirectory() {
+        var major = questionBadgePicker.getMajor();
+        var selectedMinors = questionBadgePicker.getMinorTags();
+        var query = questionSearch.value.trim().toLocaleUpperCase();
+        var groups = Object.create(null);
+        var visibleQuestions = Object.create(null);
+
+        questionDirectory.innerHTML = "";
+        if (!major) {
+            questionDirectoryStatus.textContent = "Choose a major badge to find questions.";
+            return;
+        }
+
+        publicQuestions.forEach(function (question) {
+            var tags = Array.isArray(question.tags) ? question.tags : [];
+            var searchable = question.question.toLocaleUpperCase() + " "
+                + (question.description || "").toLocaleUpperCase() + " " + tags.join(" ");
+            if (tags.indexOf(major) === -1) {
+                return;
+            }
+            if (selectedMinors.length
+                    && !selectedMinors.some(function (badge) { return tags.indexOf(badge) !== -1; })) {
+                return;
+            }
+            if (query && searchable.indexOf(query) === -1) {
+                return;
+            }
+
+            var resultBadges = selectedMinors.length ? selectedMinors : [major];
+            resultBadges.filter(function (badge) {
+                return tags.indexOf(badge) !== -1;
+            }).forEach(function (tag) {
+                groups[tag] = groups[tag] || [];
+                groups[tag].push({ question: question, tags: tags });
+                visibleQuestions[question.id] = true;
+            });
+        });
+
+        var badgeNames = Object.keys(groups).sort();
+        if (!badgeNames.length) {
+            questionDirectoryStatus.textContent = publicQuestions.length
+                ? "No questions match that search."
+                : "No public questions yet.";
+            return;
+        }
+
+        var questionCount = Object.keys(visibleQuestions).length;
+        questionDirectoryStatus.textContent = questionCount === 1
+            ? "1 matching public question."
+            : questionCount + " matching public questions.";
+        badgeNames.forEach(function (badge) {
+            var heading = document.createElement("h3");
+            heading.textContent = badge;
+            questionDirectory.appendChild(heading);
+
+            groups[badge].forEach(function (result) {
+                var question = result.question;
+                var card = document.createElement("article");
+                card.className = "card";
+
+                var details = document.createElement("details");
+                var summary = document.createElement("summary");
+                summary.textContent = question.question;
+                details.appendChild(summary);
+
+                var description = document.createElement("p");
+                description.textContent = question.description || "No description was provided.";
+                details.appendChild(description);
+
+                var questionBadges = document.createElement("span");
+                questionBadges.textContent = "Badges: " + (result.tags.length
+                    ? result.tags.join(", ")
+                    : "None");
+                details.appendChild(questionBadges);
+
+                var joinLink = document.createElement("a");
+                joinLink.href = "chat.html?room=" + encodeURIComponent(question.room);
+                joinLink.textContent = "Join question chat";
+                details.appendChild(joinLink);
+                card.appendChild(details);
+                questionDirectory.appendChild(card);
+            });
+        });
+    }
+
+    // Loads the public questions and their saved badges from the server's existing room directory.
+    function loadQuestionDirectory() {
+        fetch("/api/public-rooms")
+            .then(function (response) {
+                return response.json().then(function (data) {
+                    if (!response.ok) {
+                        throw new Error(data.detail || "Public questions could not be loaded.");
+                    }
+                    return data;
+                });
+            })
+            .then(function (questions) {
+                publicQuestions = questions;
+                renderQuestionDirectory();
+            })
+            .catch(function (error) {
+                questionDirectoryStatus.textContent = error.message;
+            });
+    }
+
+    // Re-render the public directory immediately when text or badge selections change.
+    questionSearch.addEventListener("input", renderQuestionDirectory);
+    questionBadgePicker.onChange(renderQuestionDirectory);
+    renderQuestionDirectory();
+    loadQuestionDirectory();
 
     /* Load the two questions that identify this chat room. */
     function loadTopic() {

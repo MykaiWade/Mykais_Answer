@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 <!-- This would be used to display the user's the profile, or for now as a test profile when doing beta testing-->
 <!DOCTYPE html>
 <html lang="en">
@@ -57,3 +58,108 @@
     -->
     </body>
 </html>
+=======
+<!DOCTYPE html>
+<!-- Shows account details, questions, profile QR sharing, camera scanning, and contacts. -->
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Profile</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <h1>My Profile</h1>
+    <p>View your account, manage contacts, and see the questions you have asked.</p>
+
+    <section class="profile-panel">
+        <h2>Account</h2>
+        <p>Your name is public. Your email is only used to sign in and is not shown here.</p>
+        <p>There is no password reset yet. Save your password somewhere safe.</p>
+        <p id="profileStatus" role="status">Loading profile...</p>
+        <div id="profileDetails" hidden>
+            <p><strong>Name:</strong> <span id="profileName"></span></p>
+            <p><strong>Verification:</strong> <span id="profileVerification"></span></p>
+        </div>
+        <button type="button" id="resendVerificationButton" hidden>Send another verification QR</button>
+        <img id="verificationQrImage" class="profile-qr" alt="Verification QR code" hidden>
+        <form id="registerForm">
+            <div class="row">
+                <label for="realName">Real name:</label>
+                <input type="text" id="realName" maxlength="100" autocomplete="name" required>
+            </div>
+            <div class="row">
+                <label for="registerEmail">Email:</label>
+                <input type="email" id="registerEmail" maxlength="254" autocomplete="email" required>
+            </div>
+            <div class="row">
+                <label for="registerPassword">Password:</label>
+                <input type="password" id="registerPassword" minlength="12" maxlength="128"
+                    autocomplete="new-password" required>
+            </div>
+            <button type="submit">Create account</button>
+            <button type="button" id="showLogin">Already have an account? Sign in</button>
+        </form>
+        <form id="loginForm" hidden>
+            <div class="row">
+                <label for="loginEmail">Email:</label>
+                <input type="email" id="loginEmail" maxlength="254" autocomplete="username" required>
+            </div>
+            <div class="row">
+                <label for="loginPassword">Password:</label>
+                <input type="password" id="loginPassword" maxlength="128"
+                    autocomplete="current-password" required>
+            </div>
+            <button type="submit">Sign in</button>
+            <button type="button" id="showRegister">Create a new account</button>
+        </form>
+        <button type="button" id="logoutButton" hidden>Sign out</button>
+    </section>
+
+    <section class="profile-panel">
+        <h2>Questions I asked</h2>
+        <p id="questionsStatus" role="status">Sign in to see your questions.</p>
+        <div id="myQuestions"></div>
+    </section>
+
+    <section class="profile-panel" id="shareProfilePanel" hidden>
+        <h2>Contacts</h2>
+        <p>Show your QR for someone to add you. Scanning adds both accounts to contacts. Only Mykai's verified #5 account can also verify an unverified member.</p>
+        <button type="button" id="showProfileQrButton">Show my QR code</button>
+        <img id="shareProfileQrImage" class="profile-qr" alt="QR code linking to your public profile" hidden>
+        <button type="button" id="openQrScannerButton">Open camera to scan a QR code</button>
+        <p id="scannerStatus" role="status"></p>
+        <div id="qrScannerPanel" hidden>
+            <video id="qrScannerVideo" autoplay playsinline></video>
+            <button type="button" id="stopQrScannerButton">Stop camera</button>
+        </div>
+    </section>
+
+    <section class="profile-panel" id="publicProfilePanel" hidden>
+        <h2>Member profile</h2>
+        <p id="publicProfileName"></p>
+        <p id="publicProfileStatus" role="status"></p>
+        <button type="button" id="addContactButton" hidden>Add to contacts</button>
+        <p id="verificationPrompt" hidden>Only verify this member if you know who they are.</p>
+        <button type="button" id="verifyScannedMemberButton" hidden>Verify this member</button>
+    </section>
+
+    <section class="profile-panel" id="contactsPanel" hidden>
+        <h2>Your contacts</h2>
+        <p id="contactsStatus" role="status"></p>
+        <h3>Contact requests</h3>
+        <ul id="incomingContactRequests"></ul>
+        <h3>Pending requests you sent</h3>
+        <ul id="outgoingContactRequests"></ul>
+        <h3>Contacts</h3>
+        <ul id="contactList"></ul>
+    </section>
+
+    <p><a href="index.html">Back to Home</a></p>
+    <script src="profile.js?v=20261117.1"></script>
+    <script src="profile-view.js"></script>
+    <script src="qr-scanner.umd.min.js?v=1.4.2"></script>
+    <script src="profile-page.js?v=20261116.3"></script>
+</body>
+</html>
+>>>>>>> d30bac54f47a505a719e52ee933b559f421f830a

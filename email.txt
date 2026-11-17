@@ -1,0 +1,11 @@
+SIGN-IN EXAMPLE (not a real account)
+
+Email: alex@example.test
+Password: Use the exact password you chose when creating your account.
+
+To sign in, open the Profile page and enter your registered email and password.
+This example address is reserved for documentation and cannot receive email.
+Do not save or share a real password in this file.
+
+To create a new account, use your own email address and a password between
+12 and 128 characters. You can then use that same email and password to sign in.

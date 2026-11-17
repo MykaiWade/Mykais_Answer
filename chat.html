@@ -1,4 +1,8 @@
 <!DOCTYPE html>
+<!--
+- Shows public questions filtered by badge, private chat lists, and the selected conversation.
+- Uses styles.css, profile.js, badge-picker.js, and chat.js; chat.js connects to server.py over HTTP and WebSocket.
+-->
 <!-- Tells the browser this is a modern HTML page. Always the first line. -->
 <html lang="en">
 <head>
@@ -20,10 +24,41 @@
     <!-- The big heading. CHANGE: edit the text between the tags. -->
     <h1>Chat</h1>
 
-    <!-- Profile name is public, but this site does not verify identity yet. -->
+    <!-- Visitors choose a major and optional minors before any public questions are shown. -->
+    <section id="questionDirectorySection" class="profile-panel">
+        <h2>Find a question room</h2>
+        <p>Choose a badge to find public questions. Open a question to read its description and join the chat.</p>
+        <div id="questionBadgeFilter" class="badge-picker">
+            <!-- This major menu uses the same badge catalog as the Ask page. -->
+            <div class="row">
+                <label for="questionMajor">Major Badge:</label>
+                <select id="questionMajor" data-badge-major>
+                    <option value="">Choose a major badge</option>
+                </select>
+            </div>
+            <!-- Minor choices appear after a major badge is selected. -->
+            <div class="row" id="questionMinorRow" data-badge-minor-row hidden>
+                <label for="questionMinor">Minor badges:</label>
+                <select id="questionMinor" data-badge-minor>
+                    <option value="">Add a minor badge</option>
+                </select>
+            </div>
+            <!-- Selected minor badges can be removed before the results update. -->
+            <div id="questionPicked" data-badge-picked></div>
+        </div>
+        <div class="row">
+            <label for="questionSearch">Search questions:</label>
+            <input type="search" id="questionSearch" placeholder="Question text (optional)" autocomplete="off">
+        </div>
+        <p id="questionDirectoryStatus" role="status">Loading public questions...</p>
+        <div id="questionDirectory"></div>
+    </section>
+
+    <!-- A roster number is assigned at signup; only the #5 account can approve verification. -->
     <section class="profile-panel">
         <h2>Account</h2>
-        <p>Your name is public. Your email is only for signing in and is not verified.</p>
+        <p><a href="profile.html">Open your profile and contact QR.</a></p>
+        <p>Your name is public. Your email is private and is used to sign in and receive a verification QR code.</p>
         <p>There is no password reset yet. Save your password somewhere safe.</p>
         <p id="profileStatus" role="status">Loading profile...</p>
         <form id="registerForm">
@@ -55,6 +90,7 @@
             <button type="button" id="showRegister">Create a new account</button>
         </form>
         <button type="button" id="logoutButton" hidden>Sign out</button>
+        <button type="button" id="resendVerificationButton" hidden>Send another verification QR</button>
     </section>
 
     <!-- chat.js fills this with rooms connected to this profile's questions. -->
@@ -102,6 +138,8 @@
     <!-- A link to the home page. href must match the file name exactly. -->
     <p><a href="index.html">Back to Home</a></p>
 
-    <script src="profile.js"></script>
-    <script src="chat.js"></script>
+    <script src="profile.js?v=20261117.1"></script>
+    <!-- Loads the shared major/minor badge controls used by the public question filter. -->
+    <script src="badge-picker.js"></script>
+    <script src="chat.js?v=20261116.2"></script>
 </body>
