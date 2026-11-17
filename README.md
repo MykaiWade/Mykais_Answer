@@ -39,6 +39,8 @@ People can view question matches and chat history without an account. An account
 
 The Chat page lists saved conversations for the signed-in profile, with the most recent message and a link to reopen each room. A reply from another person is identified in the list.
 
+The My Profile page shows the signed-in account's public name and verification status, plus the questions that account has asked. The list is private to the signed-in account.
+
 Questions submitted on Ask or created on Ask Mykai are public, including their descriptions and badges. Chat and Ask Mykai let visitors choose a major badge and optional minor badges to find matching public questions, then open a question to read its description and join its room. Do not include private information in a public question or description.
 
 The profile name and email address are not verified. The name is public; the email is only used to sign in. Passwords are stored as salted PBKDF2 hashes, and browsers use HTTP-only, same-site session cookies that are marked Secure when the site uses HTTPS. There is no password reset yet, so users must save their password safely. Accounts have a 30-day sign-in cookie.
@@ -49,9 +51,28 @@ Before allowing other devices or internet users to sign in, put the site behind 
 
 Chat rooms include an experimental audio/video calling prototype for up to four people. Calls use browser WebRTC in a peer-to-peer mesh, so each browser sends media to every other participant; call quality can drop as the group grows. The server only relays call setup messages and does not record call media. Camera and microphone access requires HTTPS (localhost is allowed for local testing). A public STUN server helps browsers find a direct connection, but some networks require a TURN relay; calls are not guaranteed to connect on every network. For larger groups, use a media server (SFU) rather than increasing the prototype limit.
 
+## Run the full app locally
+
+The full app needs Python for its API, database, and chat features. In PowerShell, from the repository folder, create a local environment and install the server packages:
+
+```powershell
+py -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+```
+
+Start the backend:
+
+```powershell
+.\.venv\Scripts\python.exe server.py
+```
+
+Open `http://127.0.0.1:8000/` in your browser. The SQLite database is saved as `chat.db` in the repository folder and remains there when the server stops. Press Ctrl+C in PowerShell to stop the server. This development server listens only on this computer; it does not make the site available to other people on the internet.
+
 ## GitHub Pages preview
 
-GitHub Pages can show a static preview of the site, but it cannot run the Python server. The preview includes the home, ask, chat, about, and Ask Mykai pages with their shared stylesheet. Account, question, room, and chat features are unavailable there, and form submissions are disabled. The database and server are not published.
+GitHub Pages can show a static preview of the site, but it cannot run the Python server. The preview includes the home, ask, chat, about, Ask Mykai, and profile pages with their shared stylesheet. Account, question, room, and chat features are unavailable there, and form submissions are disabled. The database and server are not published.
+
+Before pushing changes, run `python -m unittest discover -s tests -v` from the repository folder. This builds the same static preview in a temporary directory and checks its pages, local links, and included files without changing or publishing the site. The GitHub Pages workflow uses the same `build_pages.py` builder. To view a local preview, run `python build_pages.py --output _site`, then `python -m http.server 8000 --directory _site` and open `http://localhost:8000/`. Stop the local server with Ctrl+C.
 
 To publish the preview:
 

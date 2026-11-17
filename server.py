@@ -32,7 +32,7 @@ DB_FILE = os.path.join(HERE, "chat.db")
 # The only pages visitors are allowed to open. This is a safety list: it stops people from
 # downloading server.py or chat.db through the browser.
 # CHANGE: when you create a new page (like faq.html), add its name here without ".html": "faq".
-PAGES = {"index", "ask", "chat", "about", "ask-mykai"}
+PAGES = {"index", "ask", "chat", "about", "ask-mykai", "profile"}
 
 # Size limits, so nobody can flood the server with huge text.
 # CHANGE: raise or lower these numbers. If you change them, also change the matching
@@ -338,6 +338,34 @@ class NewPublicRoom(BaseModel):  # Validates the question submitted to create a 
     question: str  # Holds the required room topic supplied by the browser.
     description: str = ""  # Holds optional context that is public with the question.
     tags: list[str] = Field(default_factory=list)  # Holds the selected major and minor badges.
+
+
+@app.get("/api/questions/me")
+def my_questions(request: Request):
+    con = db()
+    profile = private_profile(con, request.cookies.get(SESSION_COOKIE))
+    if not profile:
+        con.close()
+        raise HTTPException(status_code=401, detail="Sign in to view your questions.")
+
+    rows = con.execute(
+        "SELECT id, question, description, created, tags FROM questions "
+        "WHERE user_id = ? ORDER BY id DESC",
+        (profile["user_id"],),
+    ).fetchall()
+    con.close()
+    return {
+        "questions": [
+            {
+                "id": row["id"],
+                "question": row["question"],
+                "description": row["description"],
+                "created": row["created"],
+                "tags": json.loads(row["tags"] or "[]"),
+            }
+            for row in rows
+        ]
+    }
 
 
 @app.post("/api/questions")   # This is the address ask.html sends the form to.
@@ -819,7 +847,7 @@ def styles():
 
 # Extra files the browser may download besides pages. Like PAGES, this is a safety list.
 # CHANGE: add each browser asset here; rooms.js supplies public-room listing and creation behavior.
-PUBLIC_FILES = {"badges.txt", "badge-picker.js", "badges.js", "ask.js", "profile.js", "chat.js", "rooms.js"}  # Allows pages to load their public scripts.
+PUBLIC_FILES = {"badges.txt", "badge-picker.js", "badges.js", "ask.js", "profile.js", "profile-view.js", "chat.js", "rooms.js"}  # Allows pages to load their public scripts.
 
 @app.get("/{name}")   # Matches approved browser assets like /badges.js and /profile.js.
 def public_file(name: str):
