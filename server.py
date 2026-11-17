@@ -231,10 +231,7 @@ def synchronize_verification_roster():
             if number is None:
                 continue
             entry = entries.get(number)
-            if entry is None:
-                entries[number] = RosterEntry(number, profile["real_name"], False)
-                roster_changed = True
-            elif entry.name.casefold() != profile["real_name"].casefold():
+            if entry and entry.name.casefold() != profile["real_name"].casefold():
                 raise RuntimeError(
                     f"Roster number {number} does not match its saved account name."
                 )

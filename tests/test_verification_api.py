@@ -279,6 +279,38 @@ class VerificationApiTests(unittest.TestCase):
         self.assertEqual(login.status_code, 200, login.text)
         self.assertEqual(login.json()["real_name"], account["real_name"])
 
+    def test_removed_roster_account_is_not_restored_on_startup(self):
+        user_id = "removed-roster-test-id"
+        con = self.server.db()
+        con.execute(
+            "INSERT INTO profiles "
+            "(user_id, real_name, verified, created, email, password_hash, "
+            "account_number) VALUES (?, ?, 1, ?, ?, '', ?)",
+            (user_id, "Removed Duplicate", time.time(), "removed@example.test", 99),
+        )
+        con.commit()
+        con.close()
+
+        try:
+            roster_before = self.roster_path.read_text(encoding="utf-8")
+            self.server.synchronize_verification_roster()
+
+            self.assertEqual(
+                self.roster_path.read_text(encoding="utf-8"),
+                roster_before,
+            )
+            con = self.server.db()
+            profile = con.execute(
+                "SELECT verified FROM profiles WHERE user_id = ?", (user_id,)
+            ).fetchone()
+            con.close()
+            self.assertEqual(profile["verified"], 0)
+        finally:
+            con = self.server.db()
+            con.execute("DELETE FROM profiles WHERE user_id = ?", (user_id,))
+            con.commit()
+            con.close()
+
 
 if __name__ == "__main__":
     unittest.main()
