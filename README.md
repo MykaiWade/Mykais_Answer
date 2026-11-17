@@ -31,5 +31,20 @@ WORK WITH ONE ANOTHER TO GET WHAT YOU THINK NEEDS TO GET DONE, DONE AS SOON AS P
 
 PEOPLE MYKAI WORKED WITH:
 
+ACCOUNT SIGN-IN AND EMAIL
+
+Open the Profile page to create an account or sign in. Use the same email address
+and password you entered when creating the account. Passwords must be 12-128
+characters; the email address must be one you can access to receive verification.
+
+For signup verification emails, copy `.env.example` to `.env` and replace its
+SMTP placeholders with your email provider's SMTP settings. Do not put a real
+password in `email.txt` or commit `.env`. If mail is temporarily unavailable,
+the account can still be created and signed into, but it remains unverified
+until you configure email and request another verification QR from the Profile
+page.
+
+`email.txt` is only a sign-in example; it is not read by the app and does not
+create an account.
 
 
