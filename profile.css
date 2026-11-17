@@ -1,0 +1,81 @@
+
+/* Loading screen */
+.profile-loading {
+    min-height: 70vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 20px;
+    color: #e5e7eb;
+}
+
+.profile-loading h2 {
+    margin-bottom: 8px;
+    animation: loadingPulse 1.5s ease-in-out infinite;
+}
+
+.profile-loading p {
+    color: #9ca3af;
+}
+
+/* Spinning ring */
+.loader {
+    width: 52px;
+    height: 52px;
+    border: 5px solid #30394b;
+    border-top-color: #5865f2;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin-bottom: 20px;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@keyframes loadingPulse {
+    0%, 100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.5;
+    }
+}
+
+/* Hidden profile until data is ready */
+[hidden] {
+    display: none !important;
+}
+
+/* Reveal profile smoothly */
+.profile-container {
+    animation: profileAppear 0.6s ease both;
+}
+
+@keyframes profileAppear {
+    from {
+        opacity: 0;
+        transform: translateY(12px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .loader,
+    .profile-loading h2 {
+        animation: none;
+    }
+
+    .profile-container {
+        animation: none;
+    }
+}
