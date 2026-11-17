@@ -54,10 +54,11 @@
         <div id="questionDirectory"></div>
     </section>
 
-    <!-- Profile name is public, but this site does not verify identity yet. -->
+    <!-- A roster number is assigned at signup; only the #5 account can approve verification. -->
     <section class="profile-panel">
         <h2>Account</h2>
-        <p>Your name is public. Your email is only for signing in and is not verified.</p>
+        <p><a href="profile.html">Open your profile and contact QR.</a></p>
+        <p>Your name is public. Your email is private and is used to sign in and receive a verification QR code.</p>
         <p>There is no password reset yet. Save your password somewhere safe.</p>
         <p id="profileStatus" role="status">Loading profile...</p>
         <form id="registerForm">
@@ -89,6 +90,7 @@
             <button type="button" id="showRegister">Create a new account</button>
         </form>
         <button type="button" id="logoutButton" hidden>Sign out</button>
+        <button type="button" id="resendVerificationButton" hidden>Send another verification QR</button>
     </section>
 
     <!-- chat.js fills this with rooms connected to this profile's questions. -->
@@ -136,8 +138,8 @@
     <!-- A link to the home page. href must match the file name exactly. -->
     <p><a href="index.html">Back to Home</a></p>
 
-    <script src="profile.js"></script>
+    <script src="profile.js?v=20261116.4"></script>
     <!-- Loads the shared major/minor badge controls used by the public question filter. -->
     <script src="badge-picker.js"></script>
-    <script src="chat.js"></script>
+    <script src="chat.js?v=20261116.2"></script>
 </body>

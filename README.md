@@ -41,9 +41,25 @@ The Chat page lists saved conversations for the signed-in profile, with the most
 
 Questions submitted on Ask or created on Ask Mykai are public, including their descriptions and badges. Chat and Ask Mykai let visitors choose a major badge and optional minor badges to find matching public questions, then open a question to read its description and join its room. Do not include private information in a public question or description.
 
-The profile name and email address are not verified. The name is public; the email is only used to sign in. Passwords are stored as salted PBKDF2 hashes, and browsers use HTTP-only, same-site session cookies that are marked Secure when the site uses HTTPS. There is no password reset yet, so users must save their password safely. Accounts have a 30-day sign-in cookie.
+Profile names are public. Email addresses are private and used for sign-in and verification QR delivery. Passwords are stored as salted PBKDF2 hashes, and browsers use HTTP-only, same-site session cookies that are marked Secure when the site uses HTTPS. There is no password reset yet, so users must save their password safely. Accounts have a 30-day sign-in cookie.
 
 When an existing browser-only profile is upgraded to an account in the same browser, its saved questions and chat history stay connected to the account.
+
+### Member verification
+
+The server reads `verified.txt` as its member roster. Each account receives a number; an entry such as `New Member 6` is unverified, and a trailing `#` marks an approved member. The file is not served to visitors.
+
+On signup, the site still emails a one-time verification QR to the account email; it expires after 24 hours. The simpler option is to show the member's Profile QR. When Mykai's verified account (#5) scans an unverified member's profile, it can explicitly approve them there. Only #5 can verify accounts, and a scan never verifies someone without that explicit action. This is a manual approval badge, not proof of legal identity.
+
+The **Profile** page shows a shareable account QR and can open the camera to scan another member's code. Scanning while signed in adds both accounts to each other's private contact lists immediately. If the verified Mykai account (#5) scans an unverified member's QR, the page also offers a separate **Verify this member** action; adding a contact alone never verifies an account. Camera scanning requires HTTPS and browser camera permission; QR decoding uses a local bundled library, so camera frames are not sent to an external service.
+
+Configure SMTP before enabling new account signups:
+
+1. Copy `.env.example` to `.env` on the hosting computer.
+2. Set `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, and `SMTP_FROM` to your email provider's SMTP settings. Keep `.env` private; it is ignored by Git.
+3. Keep `PUBLIC_BASE_URL` set to the HTTPS website address.
+
+An unverified signed-in account can use **Send another verification QR** if its code expires.
 
 Before allowing other devices or internet users to sign in, put the site behind HTTPS. The built-in development server uses plain HTTP; do not send passwords over a network until HTTPS is configured.
 
@@ -51,7 +67,7 @@ Chat rooms include an experimental audio/video calling prototype for up to four 
 
 ## GitHub Pages preview
 
-GitHub Pages can show a static preview of the site, but it cannot run the Python server. The preview includes the home, ask, chat, about, and Ask Mykai pages with their shared stylesheet. Account, question, room, and chat features are unavailable there, and form submissions are disabled. The database and server are not published.
+GitHub Pages can show a static preview of the site, but it cannot run the Python server. The preview includes the home, ask, chat, about, Ask Mykai, and profile pages with their shared stylesheet. Account, contact, question, room, and chat features are unavailable there, and form submissions are disabled. The database and server are not published.
 
 To publish the preview:
 
@@ -63,7 +79,20 @@ The deployed address will appear in the workflow run and under **Settings > Page
 
 ## Start the full website
 
-On the Windows computer that hosts the site, open PowerShell in this repository and run:
+On the Windows computer that hosts the site, open PowerShell in this repository and install the server dependencies:
+
+```powershell
+python -m pip install -r requirements.txt
+```
+
+To run the verification tests, install the test dependencies and run:
+
+```powershell
+python -m pip install -r requirements-test.txt
+python -m unittest discover -s tests -v
+```
+
+Then start the website and its Cloudflare Tunnel:
 
 ```powershell
 python startup.py

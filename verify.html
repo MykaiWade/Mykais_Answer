@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<!-- verify.html loads verification-ui.js, which checks and approves email QR tokens through server.py. -->
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verify a member</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <h1>Verify a member</h1>
+    <p id="verificationStatus" role="status">Checking verification request...</p>
+
+    <section id="verifierSignIn" class="profile-panel" hidden>
+        <h2>Sign in as the verifier</h2>
+        <p>Only Mykai Wade's verified account (#5) can approve this request.</p>
+        <form id="verificationLoginForm">
+            <div class="row">
+                <label for="verificationEmail">Email:</label>
+                <input type="email" id="verificationEmail" maxlength="254"
+                    autocomplete="username" required>
+            </div>
+            <div class="row">
+                <label for="verificationPassword">Password:</label>
+                <input type="password" id="verificationPassword" maxlength="128"
+                    autocomplete="current-password" required>
+            </div>
+            <button type="submit">Sign in</button>
+        </form>
+    </section>
+
+    <section id="verificationApproval" class="profile-panel" hidden>
+        <h2>Review member</h2>
+        <p id="verificationMember"></p>
+        <p>Only approve this person after you have reviewed their identity.</p>
+        <button type="button" id="approveVerificationButton">Verify this member</button>
+    </section>
+
+    <p><a href="chat.html">Back to the website</a></p>
+    <script src="verification-ui.js?v=20261116.2"></script>
+</body>
+</html>

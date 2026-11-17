@@ -1,22 +1,40 @@
 # - Runs the FastAPI app for accounts, public questions, badge matching, and live chat.
 # - Serves the HTML/CSS/JavaScript files and reads/writes chat.db for saved data.
+# - Browser scripts such as profile.js, profile-page.js, and chat.js call its API routes.
+# - Verification helpers are in verification.py; approved member numbers come from verified.txt.
 # - Start locally with: python server.py (press Ctrl+C to stop).
 
 # --- Imports: tools this file borrows. You only add one if you use a new tool. ---
+import base64
 import os        # Works with file paths and folders.
 import hashlib   # Hashes passwords and session tokens before saving them.
 import hmac      # Compares password hashes without timing leaks.
 import json      # Stores each question's selected badges in the database.
 import re        # "Regular expressions": finds patterns in text (used to split text into words).
 import secrets   # Creates unpredictable profile IDs.
+import smtplib
 import sqlite3   # The database. It stores everything in one file (chat.db).
 import time      # Gives the current time, so each message gets a timestamp.
+from pathlib import Path
 from typing import Optional
+from urllib.parse import urlsplit
 
+from dotenv import load_dotenv
 import uvicorn   # The program that actually runs the web server.
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect  # The web framework: routes, errors, live chat.
-from fastapi.responses import FileResponse, JSONResponse  # Sends pages and API responses.
+from fastapi.responses import FileResponse, JSONResponse, Response  # Sends pages and API responses.
 from pydantic import BaseModel, Field        # Describes what data a form submission must contain.
+from verification import (
+    RosterEntry,
+    hash_verification_token,
+    new_verification_token,
+    next_member_number,
+    qr_code_png,
+    read_roster,
+    send_verification_email,
+    verification_url,
+    write_roster,
+)
 
 # Creates the web app. Every "@app..." line below attaches a feature to it.
 app = FastAPI()
@@ -24,15 +42,22 @@ app = FastAPI()
 # The folder this file is in. Pages and the database are found relative to it.
 # CHANGE: normally leave this alone.
 HERE = os.path.dirname(os.path.abspath(__file__))
+load_dotenv(Path(HERE) / ".env")
 
 # Where the database lives. It is created automatically the first time you run the server.
 # CHANGE: rename "chat.db" if you want. If you delete the file, ALL questions and messages are erased.
-DB_FILE = os.path.join(HERE, "chat.db")
+DB_FILE = os.environ.get("MYKAIS_DB_FILE", os.path.join(HERE, "chat.db"))
+VERIFIED_FILE = Path(
+    os.environ.get("MYKAIS_VERIFIED_FILE", Path(HERE) / "verified.txt")
+)
+VERIFIER_ACCOUNT_NUMBER = 5
+VERIFICATION_REQUEST_LIFETIME = 24 * 60 * 60
+PUBLIC_PROFILE_ID_BYTES = 18
 
 # The only pages visitors are allowed to open. This is a safety list: it stops people from
 # downloading server.py or chat.db through the browser.
 # CHANGE: when you create a new page (like faq.html), add its name here without ".html": "faq".
-PAGES = {"index", "ask", "chat", "about", "ask-mykai"}
+PAGES = {"index", "ask", "chat", "about", "ask-mykai", "profile", "verify"}
 
 # Size limits, so nobody can flood the server with huge text.
 # CHANGE: raise or lower these numbers. If you change them, also change the matching
@@ -61,11 +86,12 @@ def setup_database():
     # Runs once at startup. Creates the two tables (like spreadsheets) if they don't exist yet.
     con = db()
 
-    # Profile names are public claims; verification remains off until a real process exists.
+    # The roster file is authoritative; this column is kept in sync for older data.
     con.execute(
         "CREATE TABLE IF NOT EXISTS profiles ("
         "user_id TEXT PRIMARY KEY, real_name TEXT NOT NULL, "
         "verified INTEGER NOT NULL DEFAULT 0, created REAL NOT NULL, "
+        "account_number INTEGER, public_id TEXT, "
         "email TEXT, password_hash TEXT)"
     )
     profile_columns = {
@@ -75,6 +101,26 @@ def setup_database():
         con.execute("ALTER TABLE profiles ADD COLUMN email TEXT")
     if "password_hash" not in profile_columns:
         con.execute("ALTER TABLE profiles ADD COLUMN password_hash TEXT")
+    if "account_number" not in profile_columns:
+        con.execute("ALTER TABLE profiles ADD COLUMN account_number INTEGER")
+    if "public_id" not in profile_columns:
+        con.execute("ALTER TABLE profiles ADD COLUMN public_id TEXT")
+    con.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS profiles_public_id_unique "
+        "ON profiles(public_id) WHERE public_id IS NOT NULL"
+    )
+    profiles_without_public_id = con.execute(
+        "SELECT user_id FROM profiles WHERE public_id IS NULL"
+    ).fetchall()
+    for profile in profiles_without_public_id:
+        con.execute(
+            "UPDATE profiles SET public_id = ? WHERE user_id = ?",
+            (secrets.token_urlsafe(PUBLIC_PROFILE_ID_BYTES), profile["user_id"]),
+        )
+    con.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS profiles_account_number_unique "
+        "ON profiles(account_number) WHERE account_number IS NOT NULL"
+    )
     con.execute(
         "CREATE UNIQUE INDEX IF NOT EXISTS profiles_email_unique "
         "ON profiles(email COLLATE NOCASE) WHERE email IS NOT NULL"
@@ -84,6 +130,38 @@ def setup_database():
     con.execute(
         "CREATE TABLE IF NOT EXISTS sessions ("
         "token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL, expires REAL NOT NULL)"
+    )
+    con.execute(
+        "CREATE TABLE IF NOT EXISTS verification_requests ("
+        "token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL, "
+        "created REAL NOT NULL, expires REAL NOT NULL, used_at REAL)"
+    )
+    con.execute(
+        "CREATE INDEX IF NOT EXISTS verification_requests_user "
+        "ON verification_requests(user_id, expires)"
+    )
+    con.execute(
+        "CREATE TABLE IF NOT EXISTS verification_mail_events ("
+        "ip_hash TEXT NOT NULL, created REAL NOT NULL)"
+    )
+    con.execute(
+        "CREATE INDEX IF NOT EXISTS verification_mail_events_ip_created "
+        "ON verification_mail_events(ip_hash, created)"
+    )
+    con.execute(
+        "CREATE TABLE IF NOT EXISTS contact_requests ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT, requester_id TEXT NOT NULL, "
+        "target_id TEXT NOT NULL, created REAL NOT NULL, "
+        "UNIQUE(requester_id, target_id))"
+    )
+    con.execute(
+        "CREATE INDEX IF NOT EXISTS contact_requests_target "
+        "ON contact_requests(target_id, created)"
+    )
+    con.execute(
+        "CREATE TABLE IF NOT EXISTS contacts ("
+        "user_id TEXT NOT NULL, contact_user_id TEXT NOT NULL, created REAL NOT NULL, "
+        "PRIMARY KEY(user_id, contact_user_id), CHECK(user_id != contact_user_id))"
     )
 
     # Table 1: questions. Each row = one submitted question.
@@ -115,9 +193,103 @@ def setup_database():
 setup_database()   # Actually runs the function above when the server starts.
 
 
+def roster_verified(account_number, real_name, entries=None):
+    if account_number is None:
+        return False
+    if entries is None:
+        _, entries = read_roster(VERIFIED_FILE)
+    entry = entries.get(account_number)
+    return bool(
+        entry
+        and entry.name.casefold() == real_name.casefold()
+        and entry.verified
+    )
+
+
+def synchronize_verification_roster():
+    headers, entries = read_roster(VERIFIED_FILE)
+    original_headers = list(headers)
+    original_entries = dict(entries)
+    con = db()
+    roster_changed = False
+    try:
+        con.execute("BEGIN IMMEDIATE")
+        profiles = con.execute(
+            "SELECT user_id, real_name, account_number FROM profiles "
+            "WHERE email IS NOT NULL ORDER BY created, user_id"
+        ).fetchall()
+        name_counts = {}
+        for profile in profiles:
+            normalized_name = profile["real_name"].casefold()
+            name_counts[normalized_name] = name_counts.get(normalized_name, 0) + 1
+
+        used_numbers = set()
+        for profile in profiles:
+            number = profile["account_number"]
+            if number is None:
+                continue
+            entry = entries.get(number)
+            if entry is None:
+                entries[number] = RosterEntry(number, profile["real_name"], False)
+                roster_changed = True
+            elif entry.name.casefold() != profile["real_name"].casefold():
+                raise RuntimeError(
+                    f"Roster number {number} does not match its saved account name."
+                )
+            used_numbers.add(number)
+
+        for profile in profiles:
+            if profile["account_number"] is not None:
+                continue
+            normalized_name = profile["real_name"].casefold()
+            matching_numbers = [
+                number for number, entry in entries.items()
+                if number not in used_numbers
+                and entry.name.casefold() == normalized_name
+            ]
+            if name_counts[normalized_name] == 1 and len(matching_numbers) == 1:
+                number = matching_numbers[0]
+            else:
+                number = next_member_number(entries, used_numbers)
+                entries[number] = RosterEntry(number, profile["real_name"], False)
+                roster_changed = True
+            con.execute(
+                "UPDATE profiles SET account_number = ? WHERE user_id = ?",
+                (number, profile["user_id"]),
+            )
+            used_numbers.add(number)
+
+        for profile in profiles:
+            number = profile["account_number"]
+            if number is None:
+                number = con.execute(
+                    "SELECT account_number FROM profiles WHERE user_id = ?",
+                    (profile["user_id"],),
+                ).fetchone()["account_number"]
+            verified = roster_verified(number, profile["real_name"], entries)
+            con.execute(
+                "UPDATE profiles SET verified = ? WHERE user_id = ?",
+                (int(verified), profile["user_id"]),
+            )
+
+        if roster_changed:
+            write_roster(VERIFIED_FILE, headers, entries)
+        con.commit()
+    except (OSError, RuntimeError, sqlite3.Error, ValueError):
+        con.rollback()
+        if roster_changed:
+            write_roster(VERIFIED_FILE, original_headers, original_entries)
+        raise
+    finally:
+        con.close()
+
+
+synchronize_verification_roster()
+
+
 # =====================================================================
 # ACCOUNTS
-# Names are public claims; email addresses are private sign-in details and aren't verified.
+# Public names are claims; verification is controlled by verified.txt and Mykai's approval.
 # =====================================================================
 
 class RegisterAccount(BaseModel):
@@ -130,6 +302,14 @@ class RegisterAccount(BaseModel):
 class LoginAccount(BaseModel):
     email: str
     password: str
+
+
+class VerificationToken(BaseModel):
+    token: str = Field(min_length=30, max_length=128)
+
+
+class ContactRequest(BaseModel):
+    public_id: str = Field(min_length=20, max_length=64)
 
 
 def password_hash(password):
@@ -160,12 +340,24 @@ def private_profile(con, token):
     if not token:
         return None
     token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
-    return con.execute(
-        "SELECT profiles.user_id, profiles.real_name, profiles.verified "
+    profile = con.execute(
+        "SELECT profiles.user_id, profiles.real_name, profiles.account_number, "
+        "profiles.public_id "
         "FROM sessions JOIN profiles ON profiles.user_id = sessions.user_id "
         "WHERE sessions.token_hash = ? AND sessions.expires > ?",
         (token_hash, time.time()),
     ).fetchone()
+    if not profile:
+        return None
+    return {
+        "user_id": profile["user_id"],
+        "real_name": profile["real_name"],
+        "account_number": profile["account_number"],
+        "public_id": profile["public_id"],
+        "verified": roster_verified(
+            profile["account_number"], profile["real_name"]
+        ),
+    }
 
 
 def set_session_cookie(response, token, request):
@@ -180,7 +372,7 @@ def set_session_cookie(response, token, request):
     )
 
 
-def finish_login(con, user_id, request, message):
+def finish_login(con, user_id, request, message, extra=None):
     # Remove expired sessions and store only this browser's new token hash.
     con.execute("DELETE FROM sessions WHERE expires <= ?", (time.time(),))
     token = secrets.token_urlsafe(32)
@@ -190,17 +382,50 @@ def finish_login(con, user_id, request, message):
         (token_hash, user_id, time.time() + SESSION_DAYS * 24 * 60 * 60),
     )
     profile = con.execute(
-        "SELECT user_id, real_name, verified FROM profiles WHERE user_id = ?", (user_id,)
+        "SELECT user_id, real_name, account_number, public_id "
+        "FROM profiles WHERE user_id = ?",
+        (user_id,),
     ).fetchone()
     con.commit()
-    response = JSONResponse({
+    data = {
         "message": message,
         "user_id": profile["user_id"],
         "real_name": profile["real_name"],
-        "verified": bool(profile["verified"]),
-    })
+        "account_number": profile["account_number"],
+        "public_id": profile["public_id"],
+        "verified": roster_verified(
+            profile["account_number"], profile["real_name"]
+        ),
+    }
+    if extra:
+        data.update(extra)
+    response = JSONResponse(data)
     set_session_cookie(response, token, request)
     return response
+
+
+def record_verification_email_event(con, request):
+    client_ip = request.headers.get("cf-connecting-ip")
+    if not client_ip and request.client:
+        client_ip = request.client.host
+    ip_hash = hashlib.sha256((client_ip or "unknown").encode("utf-8")).hexdigest()
+    now = time.time()
+    cutoff = now - 60 * 60
+    con.execute("DELETE FROM verification_mail_events WHERE created <= ?", (cutoff,))
+    sent = con.execute(
+        "SELECT COUNT(*) FROM verification_mail_events "
+        "WHERE ip_hash = ? AND created > ?",
+        (ip_hash, cutoff),
+    ).fetchone()[0]
+    if sent >= 5:
+        raise HTTPException(
+            status_code=429,
+            detail="Too many verification emails were requested from this connection. Try again later.",
+        )
+    con.execute(
+        "INSERT INTO verification_mail_events (ip_hash, created) VALUES (?, ?)",
+        (ip_hash, now),
+    )
 
 
 @app.post("/api/auth/register")
@@ -215,13 +440,19 @@ def register_account(account: RegisterAccount, request: Request):
     if len(password) < 12 or len(password) > 128:
         raise HTTPException(status_code=400, detail="Use a password between 12 and 128 characters.")
 
+    roster_changed = False
     con = db()
     try:
-        con.execute("BEGIN")
+        con.execute("BEGIN IMMEDIATE")
+        headers, entries = read_roster(VERIFIED_FILE)
+        original_headers = list(headers)
+        original_entries = dict(entries)
+        record_verification_email_event(con, request)
         # Keep this browser's old questions/chats when it upgrades its old profile.
         legacy_id = (account.legacy_user_id or "")[:64]
         legacy = con.execute(
-            "SELECT user_id FROM profiles WHERE user_id = ? AND email IS NULL "
+            "SELECT user_id, account_number FROM profiles "
+            "WHERE user_id = ? AND email IS NULL "
             "AND password_hash IS NULL",
             (legacy_id,),
         ).fetchone() if legacy_id else None
@@ -236,14 +467,80 @@ def register_account(account: RegisterAccount, request: Request):
             user_id = secrets.token_urlsafe(32)
             con.execute(
                 "INSERT INTO profiles "
-                "(user_id, real_name, verified, created, email, password_hash) "
-                "VALUES (?, ?, 0, ?, ?, ?)",
-                (user_id, real_name, time.time(), email, password_hash(password)),
+                "(user_id, real_name, verified, created, email, password_hash, "
+                "account_number, public_id) VALUES (?, ?, 0, ?, ?, ?, NULL, ?)",
+                (
+                    user_id,
+                    real_name,
+                    time.time(),
+                    email,
+                    password_hash(password),
+                    secrets.token_urlsafe(PUBLIC_PROFILE_ID_BYTES),
+                ),
             )
-        return finish_login(con, user_id, request, "Account created.")
+        profile = con.execute(
+            "SELECT account_number FROM profiles WHERE user_id = ?", (user_id,)
+        ).fetchone()
+        account_number = profile["account_number"]
+        if account_number is None:
+            existing_numbers = [
+                row["account_number"]
+                for row in con.execute(
+                    "SELECT account_number FROM profiles WHERE account_number IS NOT NULL"
+                )
+            ]
+            account_number = next_member_number(entries, existing_numbers)
+            entries[account_number] = RosterEntry(
+                account_number, real_name, False
+            )
+            write_roster(VERIFIED_FILE, headers, entries)
+            roster_changed = True
+            con.execute(
+                "UPDATE profiles SET account_number = ?, verified = 0 "
+                "WHERE user_id = ?",
+                (account_number, user_id),
+            )
+
+        token = new_verification_token()
+        con.execute(
+            "DELETE FROM verification_requests WHERE user_id = ? AND used_at IS NULL",
+            (user_id,),
+        )
+        con.execute(
+            "INSERT INTO verification_requests "
+            "(token_hash, user_id, created, expires, used_at) VALUES (?, ?, ?, ?, NULL)",
+            (
+                hash_verification_token(token),
+                user_id,
+                time.time(),
+                time.time() + VERIFICATION_REQUEST_LIFETIME,
+            ),
+        )
+        link = verification_url(
+            os.environ.get("PUBLIC_BASE_URL", "https://mykaianswer.com").strip(),
+            token,
+        )
+        send_verification_email(email, real_name, account_number, link)
+        return finish_login(
+            con,
+            user_id,
+            request,
+            "Account created.",
+            {"verification_email_sent": True},
+        )
     except sqlite3.IntegrityError:
         con.rollback()
+        if roster_changed:
+            write_roster(VERIFIED_FILE, original_headers, original_entries)
         raise HTTPException(status_code=409, detail="That email already has an account.")
+    except (OSError, RuntimeError, smtplib.SMTPException, ValueError) as error:
+        con.rollback()
+        if roster_changed:
+            write_roster(VERIFIED_FILE, original_headers, original_entries)
+        raise HTTPException(
+            status_code=502,
+            detail=f"Account was not created because its verification email failed: {error}",
+        ) from error
     finally:
         con.close()
 
@@ -276,8 +573,545 @@ def current_account(request: Request):
     return {
         "user_id": profile["user_id"],
         "real_name": profile["real_name"],
+        "account_number": profile["account_number"],
+        "public_id": profile["public_id"],
         "verified": bool(profile["verified"]),
     }
+
+
+@app.get("/api/public-profile/{public_id}")
+def get_public_profile(public_id: str, request: Request):
+    con = db()
+    try:
+        target = con.execute(
+            "SELECT user_id, real_name, account_number, public_id "
+            "FROM profiles WHERE public_id = ?",
+            (public_id,),
+        ).fetchone()
+        if not target:
+            raise HTTPException(status_code=404, detail="This profile was not found.")
+
+        viewer = private_profile(con, request.cookies.get(SESSION_COOKIE))
+        relationship = "signed_out"
+        if viewer:
+            if viewer["user_id"] == target["user_id"]:
+                relationship = "self"
+            elif con.execute(
+                "SELECT 1 FROM contacts WHERE user_id = ? AND contact_user_id = ?",
+                (viewer["user_id"], target["user_id"]),
+            ).fetchone():
+                relationship = "connected"
+            elif con.execute(
+                "SELECT 1 FROM contact_requests "
+                "WHERE requester_id = ? AND target_id = ?",
+                (viewer["user_id"], target["user_id"]),
+            ).fetchone():
+                relationship = "request_sent"
+            elif con.execute(
+                "SELECT 1 FROM contact_requests "
+                "WHERE requester_id = ? AND target_id = ?",
+                (target["user_id"], viewer["user_id"]),
+            ).fetchone():
+                relationship = "request_received"
+            else:
+                relationship = "none"
+
+        return {
+            "real_name": target["real_name"],
+            "account_number": target["account_number"],
+            "verified": roster_verified(
+                target["account_number"], target["real_name"]
+            ),
+            "relationship": relationship,
+            "can_verify": bool(
+                viewer
+                and viewer["account_number"] == VERIFIER_ACCOUNT_NUMBER
+                and viewer["verified"]
+                and not roster_verified(
+                    target["account_number"], target["real_name"]
+                )
+            ),
+        }
+    finally:
+        con.close()
+
+
+# These helpers protect contact and verification actions from signed-out or cross-site requests.
+def require_same_origin(request):
+    origin = request.headers.get("origin", "")
+    host = request.headers.get("host", "")
+    parsed_origin = urlsplit(origin)
+    if not origin or not host or parsed_origin.netloc.casefold() != host.casefold():
+        raise HTTPException(status_code=403, detail="This verification request was rejected.")
+    hostname = (parsed_origin.hostname or "").casefold()
+    local_http = parsed_origin.scheme == "http" and hostname in {
+        "localhost", "127.0.0.1", "::1",
+    }
+    if parsed_origin.scheme != "https" and not local_http:
+        raise HTTPException(status_code=403, detail="Verification requires a secure page.")
+
+
+def require_verifier(con, request):
+    profile = private_profile(con, request.cookies.get(SESSION_COOKIE))
+    if not profile:
+        raise HTTPException(status_code=401, detail="Sign in with the verified account first.")
+    if (
+        profile["account_number"] != VERIFIER_ACCOUNT_NUMBER
+        or not profile["verified"]
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="Only the verified Mykai Wade account (#5) can approve members.",
+        )
+    return profile
+
+
+def contact_card(con, user_id):
+    row = con.execute(
+        "SELECT user_id, real_name, account_number, public_id "
+        "FROM profiles WHERE user_id = ?",
+        (user_id,),
+    ).fetchone()
+    return {
+        "public_id": row["public_id"],
+        "real_name": row["real_name"],
+        "account_number": row["account_number"],
+        "verified": roster_verified(row["account_number"], row["real_name"]),
+    }
+
+
+# The Profile page uses these routes to list contacts and manage contact requests.
+@app.get("/api/contacts")
+def list_contacts(request: Request):
+    con = db()
+    try:
+        profile = private_profile(con, request.cookies.get(SESSION_COOKIE))
+        if not profile:
+            raise HTTPException(status_code=401, detail="Sign in to view your contacts.")
+        contact_ids = con.execute(
+            "SELECT contact_user_id FROM contacts WHERE user_id = ? "
+            "ORDER BY created DESC",
+            (profile["user_id"],),
+        ).fetchall()
+        incoming = con.execute(
+            "SELECT id, requester_id, created FROM contact_requests "
+            "WHERE target_id = ? ORDER BY created",
+            (profile["user_id"],),
+        ).fetchall()
+        outgoing = con.execute(
+            "SELECT target_id, created FROM contact_requests "
+            "WHERE requester_id = ? ORDER BY created",
+            (profile["user_id"],),
+        ).fetchall()
+        return {
+            "contacts": [contact_card(con, row["contact_user_id"]) for row in contact_ids],
+            "incoming": [
+                {
+                    "id": row["id"],
+                    **contact_card(con, row["requester_id"]),
+                }
+                for row in incoming
+            ],
+            "outgoing": [
+                contact_card(con, row["target_id"]) for row in outgoing
+            ],
+        }
+    finally:
+        con.close()
+
+
+@app.post("/api/contacts/requests")
+def create_contact_request(payload: ContactRequest, request: Request):
+    require_same_origin(request)
+    con = db()
+    try:
+        con.execute("BEGIN IMMEDIATE")
+        requester = private_profile(con, request.cookies.get(SESSION_COOKIE))
+        if not requester:
+            raise HTTPException(status_code=401, detail="Sign in to add a contact.")
+        target = con.execute(
+            "SELECT user_id FROM profiles WHERE public_id = ?",
+            (payload.public_id,),
+        ).fetchone()
+        if not target:
+            raise HTTPException(status_code=404, detail="This profile was not found.")
+        if requester["user_id"] == target["user_id"]:
+            raise HTTPException(status_code=400, detail="You cannot add your own account.")
+        if con.execute(
+            "SELECT 1 FROM contacts WHERE user_id = ? AND contact_user_id = ?",
+            (requester["user_id"], target["user_id"]),
+        ).fetchone():
+            raise HTTPException(status_code=409, detail="You are already contacts.")
+        if con.execute(
+            "SELECT 1 FROM contact_requests WHERE requester_id = ? AND target_id = ?",
+            (requester["user_id"], target["user_id"]),
+        ).fetchone():
+            raise HTTPException(status_code=409, detail="A contact request is already pending.")
+        if con.execute(
+            "SELECT 1 FROM contact_requests WHERE requester_id = ? AND target_id = ?",
+            (target["user_id"], requester["user_id"]),
+        ).fetchone():
+            raise HTTPException(
+                status_code=409,
+                detail="This person already requested to add you. Review it in your profile.",
+            )
+        con.execute(
+            "INSERT INTO contact_requests (requester_id, target_id, created) "
+            "VALUES (?, ?, ?)",
+            (requester["user_id"], target["user_id"], time.time()),
+        )
+        con.commit()
+        return {"message": "Contact request sent."}
+    finally:
+        con.close()
+
+
+# Scanning a profile QR creates a mutual contact; this action does not verify either account.
+@app.post("/api/contacts")
+def add_contact(payload: ContactRequest, request: Request):
+    require_same_origin(request)
+    con = db()
+    try:
+        con.execute("BEGIN IMMEDIATE")
+        requester = private_profile(con, request.cookies.get(SESSION_COOKIE))
+        if not requester:
+            raise HTTPException(status_code=401, detail="Sign in to add a contact.")
+        target = con.execute(
+            "SELECT user_id FROM profiles WHERE public_id = ?",
+            (payload.public_id,),
+        ).fetchone()
+        if not target:
+            raise HTTPException(status_code=404, detail="This profile was not found.")
+        if requester["user_id"] == target["user_id"]:
+            raise HTTPException(status_code=400, detail="You cannot add your own account.")
+
+        existing = con.execute(
+            "SELECT 1 FROM contacts WHERE user_id = ? AND contact_user_id = ?",
+            (requester["user_id"], target["user_id"]),
+        ).fetchone()
+        if existing:
+            con.commit()
+            return {"message": "You are already contacts.", "connected": True}
+
+        created = time.time()
+        con.execute(
+            "INSERT OR IGNORE INTO contacts (user_id, contact_user_id, created) "
+            "VALUES (?, ?, ?)",
+            (requester["user_id"], target["user_id"], created),
+        )
+        con.execute(
+            "INSERT OR IGNORE INTO contacts (user_id, contact_user_id, created) "
+            "VALUES (?, ?, ?)",
+            (target["user_id"], requester["user_id"], created),
+        )
+        con.execute(
+            "DELETE FROM contact_requests WHERE "
+            "(requester_id = ? AND target_id = ?) OR "
+            "(requester_id = ? AND target_id = ?)",
+            (
+                requester["user_id"],
+                target["user_id"],
+                target["user_id"],
+                requester["user_id"],
+            ),
+        )
+        con.commit()
+        return {"message": "You have been added to each other's contacts.", "connected": True}
+    finally:
+        con.close()
+
+
+# Only verified account #5 can approve a member from their public profile.
+@app.post("/api/verification/approve-profile")
+def approve_profile_verification(payload: ContactRequest, request: Request):
+    require_same_origin(request)
+    roster_changed = False
+    con = db()
+    try:
+        con.execute("BEGIN IMMEDIATE")
+        headers, entries = read_roster(VERIFIED_FILE)
+        original_headers = list(headers)
+        original_entries = dict(entries)
+        require_verifier(con, request)
+        target = con.execute(
+            "SELECT user_id, real_name, account_number FROM profiles "
+            "WHERE public_id = ?",
+            (payload.public_id,),
+        ).fetchone()
+        if not target:
+            raise HTTPException(status_code=404, detail="This profile was not found.")
+        number = target["account_number"]
+        entry = entries.get(number)
+        if not entry or entry.name.casefold() != target["real_name"].casefold():
+            raise HTTPException(
+                status_code=409,
+                detail="The member roster no longer matches this account.",
+            )
+        if not entry.verified:
+            entries[number] = RosterEntry(number, entry.name, True)
+            write_roster(VERIFIED_FILE, headers, entries)
+            roster_changed = True
+            con.execute(
+                "UPDATE profiles SET verified = 1 WHERE user_id = ?",
+                (target["user_id"],),
+            )
+        con.execute(
+            "UPDATE verification_requests SET used_at = ? "
+            "WHERE user_id = ? AND used_at IS NULL",
+            (time.time(), target["user_id"]),
+        )
+        con.commit()
+        return {
+            "real_name": target["real_name"],
+            "account_number": number,
+            "verified": True,
+            "message": f"{target['real_name']} {number} is now verified.",
+        }
+    except (OSError, sqlite3.Error):
+        con.rollback()
+        if roster_changed:
+            write_roster(VERIFIED_FILE, original_headers, original_entries)
+        raise
+    finally:
+        con.close()
+
+
+@app.post("/api/contacts/requests/{request_id}/accept")
+def accept_contact_request(request_id: int, request: Request):
+    require_same_origin(request)
+    con = db()
+    try:
+        con.execute("BEGIN IMMEDIATE")
+        profile = private_profile(con, request.cookies.get(SESSION_COOKIE))
+        if not profile:
+            raise HTTPException(status_code=401, detail="Sign in to accept a request.")
+        contact_request = con.execute(
+            "SELECT requester_id FROM contact_requests WHERE id = ? AND target_id = ?",
+            (request_id, profile["user_id"]),
+        ).fetchone()
+        if not contact_request:
+            raise HTTPException(status_code=404, detail="This contact request was not found.")
+        created = time.time()
+        con.execute(
+            "INSERT INTO contacts (user_id, contact_user_id, created) VALUES (?, ?, ?)",
+            (profile["user_id"], contact_request["requester_id"], created),
+        )
+        con.execute(
+            "INSERT INTO contacts (user_id, contact_user_id, created) VALUES (?, ?, ?)",
+            (contact_request["requester_id"], profile["user_id"], created),
+        )
+        con.execute("DELETE FROM contact_requests WHERE id = ?", (request_id,))
+        con.commit()
+        return {"message": "Contact request accepted."}
+    finally:
+        con.close()
+
+
+@app.post("/api/contacts/requests/{request_id}/decline")
+def decline_contact_request(request_id: int, request: Request):
+    require_same_origin(request)
+    con = db()
+    try:
+        con.execute("BEGIN IMMEDIATE")
+        profile = private_profile(con, request.cookies.get(SESSION_COOKIE))
+        if not profile:
+            raise HTTPException(status_code=401, detail="Sign in to manage contact requests.")
+        result = con.execute(
+            "DELETE FROM contact_requests WHERE id = ? AND target_id = ?",
+            (request_id, profile["user_id"]),
+        )
+        if result.rowcount == 0:
+            raise HTTPException(status_code=404, detail="This contact request was not found.")
+        con.commit()
+        return {"message": "Contact request declined."}
+    finally:
+        con.close()
+
+
+@app.get("/api/profile/qr")
+def get_profile_qr(request: Request):
+    con = db()
+    try:
+        profile = private_profile(con, request.cookies.get(SESSION_COOKIE))
+        if not profile:
+            raise HTTPException(status_code=401, detail="Sign in to view your profile QR.")
+        base_url = os.environ.get("PUBLIC_BASE_URL", "https://mykaianswer.com").strip()
+        parsed = urlsplit(base_url)
+        hostname = (parsed.hostname or "").casefold()
+        local_http = parsed.scheme == "http" and hostname in {
+            "localhost", "127.0.0.1", "::1",
+        }
+        if not parsed.netloc or (parsed.scheme != "https" and not local_http):
+            raise HTTPException(
+                status_code=500,
+                detail="Set PUBLIC_BASE_URL to the HTTPS website address.",
+            )
+        link = (
+            base_url.rstrip("/")
+            + "/profile.html?scan="
+            + profile["public_id"]
+        )
+        return Response(
+            content=qr_code_png(link),
+            media_type="image/png",
+            headers={"Cache-Control": "no-store"},
+        )
+    finally:
+        con.close()
+
+
+@app.post("/api/verification/request")
+def verification_request_info(payload: VerificationToken, request: Request):
+    require_same_origin(request)
+    con = db()
+    try:
+        require_verifier(con, request)
+        row = con.execute(
+            "SELECT profiles.real_name, profiles.account_number "
+            "FROM verification_requests "
+            "JOIN profiles ON profiles.user_id = verification_requests.user_id "
+            "WHERE verification_requests.token_hash = ? "
+            "AND verification_requests.used_at IS NULL "
+            "AND verification_requests.expires > ?",
+            (hash_verification_token(payload.token), time.time()),
+        ).fetchone()
+        if not row:
+            raise HTTPException(
+                status_code=404,
+                detail="This QR code is expired, invalid, or already used.",
+            )
+        return {
+            "real_name": row["real_name"],
+            "account_number": row["account_number"],
+        }
+    finally:
+        con.close()
+
+
+@app.post("/api/verification/approve")
+def approve_verification(payload: VerificationToken, request: Request):
+    require_same_origin(request)
+    roster_changed = False
+    con = db()
+    try:
+        con.execute("BEGIN IMMEDIATE")
+        headers, entries = read_roster(VERIFIED_FILE)
+        original_headers = list(headers)
+        original_entries = dict(entries)
+        require_verifier(con, request)
+        row = con.execute(
+            "SELECT verification_requests.user_id, profiles.real_name, "
+            "profiles.account_number "
+            "FROM verification_requests "
+            "JOIN profiles ON profiles.user_id = verification_requests.user_id "
+            "WHERE verification_requests.token_hash = ? "
+            "AND verification_requests.used_at IS NULL "
+            "AND verification_requests.expires > ?",
+            (hash_verification_token(payload.token), time.time()),
+        ).fetchone()
+        if not row:
+            raise HTTPException(
+                status_code=404,
+                detail="This QR code is expired, invalid, or already used.",
+            )
+
+        number = row["account_number"]
+        entry = entries.get(number)
+        if not entry or entry.name.casefold() != row["real_name"].casefold():
+            raise HTTPException(
+                status_code=409,
+                detail="The member roster no longer matches this account.",
+            )
+        if not entry.verified:
+            entries[number] = RosterEntry(number, entry.name, True)
+            write_roster(VERIFIED_FILE, headers, entries)
+            roster_changed = True
+            con.execute(
+                "UPDATE profiles SET verified = 1 WHERE user_id = ?",
+                (row["user_id"],),
+            )
+
+        con.execute(
+            "UPDATE verification_requests SET used_at = ? WHERE token_hash = ?",
+            (time.time(), hash_verification_token(payload.token)),
+        )
+        con.commit()
+        return {
+            "real_name": row["real_name"],
+            "account_number": number,
+            "verified": True,
+        }
+    except (OSError, sqlite3.Error):
+        con.rollback()
+        if roster_changed:
+            write_roster(VERIFIED_FILE, original_headers, original_entries)
+        raise
+    finally:
+        con.close()
+
+
+@app.post("/api/verification/resend")
+def resend_verification(request: Request):
+    require_same_origin(request)
+    con = db()
+    try:
+        con.execute("BEGIN IMMEDIATE")
+        profile = private_profile(con, request.cookies.get(SESSION_COOKIE))
+        if not profile:
+            raise HTTPException(status_code=401, detail="Sign in to request a QR code.")
+        if profile["verified"]:
+            raise HTTPException(status_code=409, detail="This account is already verified.")
+        account = con.execute(
+            "SELECT email FROM profiles WHERE user_id = ?", (profile["user_id"],)
+        ).fetchone()
+        if not account or not account["email"]:
+            raise HTTPException(status_code=400, detail="This account has no email address.")
+        latest = con.execute(
+            "SELECT MAX(created) FROM verification_requests WHERE user_id = ?",
+            (profile["user_id"],),
+        ).fetchone()[0]
+        if latest and time.time() - latest < 60:
+            raise HTTPException(
+                status_code=429,
+                detail="Wait one minute before requesting another verification QR code.",
+            )
+        record_verification_email_event(con, request)
+
+        token = new_verification_token()
+        con.execute(
+            "DELETE FROM verification_requests WHERE user_id = ? AND used_at IS NULL",
+            (profile["user_id"],),
+        )
+        con.execute(
+            "INSERT INTO verification_requests "
+            "(token_hash, user_id, created, expires, used_at) VALUES (?, ?, ?, ?, NULL)",
+            (
+                hash_verification_token(token),
+                profile["user_id"],
+                time.time(),
+                time.time() + VERIFICATION_REQUEST_LIFETIME,
+            ),
+        )
+        link = verification_url(
+            os.environ.get("PUBLIC_BASE_URL", "https://mykaianswer.com").strip(),
+            token,
+        )
+        send_verification_email(
+            account["email"], profile["real_name"], profile["account_number"], link
+        )
+        con.commit()
+        return {
+            "message": "A new verification QR code was sent to your email and is shown below.",
+            "qr_code": base64.b64encode(qr_code_png(link)).decode("ascii"),
+        }
+    except (OSError, RuntimeError, smtplib.SMTPException, ValueError) as error:
+        con.rollback()
+        raise HTTPException(
+            status_code=502,
+            detail=f"Could not send a verification email: {error}",
+        ) from error
+    finally:
+        con.close()
 
 
 @app.post("/api/auth/logout")
@@ -374,7 +1208,7 @@ def add_question(q: NewQuestion, request: Request):
     # CHANGE: "LIMIT 500" = only compare against the 500 newest. Raise it for more matches (slower).
     others = con.execute(
         "SELECT questions.id, questions.question, questions.description, questions.tags, "
-        "profiles.real_name, profiles.verified FROM questions "
+        "profiles.real_name, profiles.account_number FROM questions "
         "LEFT JOIN profiles ON profiles.user_id = questions.user_id "
         "WHERE questions.user_id != ? ORDER BY questions.id DESC LIMIT 500",
         (user_id,),
@@ -397,7 +1231,10 @@ def add_question(q: NewQuestion, request: Request):
                 "score": round(score, 2),   # Rounded to 2 decimals, like 0.33.
                 "shared_tags": shared_tags,
                 "real_name": row["real_name"] or "Unknown member",
-                "verified": bool(row["verified"]),
+                "account_number": row["account_number"],
+                "verified": roster_verified(
+                    row["account_number"], row["real_name"] or ""
+                ),
             })
 
     # Sort best match first.
@@ -641,6 +1478,7 @@ async def chat(ws: WebSocket, room: str):
         await ws.send_json({
             "type": "auth",
             "real_name": profile["real_name"],
+            "account_number": profile["account_number"],
             "verified": bool(profile["verified"]),
         })
 
@@ -648,7 +1486,8 @@ async def chat(ws: WebSocket, room: str):
     # CHANGE: "LIMIT 50" = how much history to show.
     con = db()
     history = con.execute(
-        "SELECT messages.user_id, messages.text, profiles.real_name, profiles.verified "
+        "SELECT messages.user_id, messages.text, profiles.real_name, "
+        "profiles.account_number "
         "FROM messages LEFT JOIN profiles ON profiles.user_id = messages.user_id "
         "WHERE messages.room = ? ORDER BY messages.id DESC LIMIT 50",
         (room,),
@@ -659,7 +1498,10 @@ async def chat(ws: WebSocket, room: str):
             "user_id": m["user_id"],
             "text": m["text"],
             "real_name": m["real_name"] or "Unknown member",
-            "verified": bool(m["verified"]),
+            "account_number": m["account_number"],
+            "verified": roster_verified(
+                m["account_number"], m["real_name"] or ""
+            ),
         })
 
     open_chat_members.setdefault(room, {})[ws] = (  # Adds this connection to live room presence counts.
@@ -773,6 +1615,7 @@ async def chat(ws: WebSocket, room: str):
                     "user_id": user_id,
                     "text": text,
                     "real_name": profile["real_name"],
+                    "account_number": profile["account_number"],
                     "verified": bool(profile["verified"]),
                 })
     except WebSocketDisconnect:
@@ -819,7 +1662,11 @@ def styles():
 
 # Extra files the browser may download besides pages. Like PAGES, this is a safety list.
 # CHANGE: add each browser asset here; rooms.js supplies public-room listing and creation behavior.
-PUBLIC_FILES = {"badges.txt", "badge-picker.js", "badges.js", "ask.js", "profile.js", "chat.js", "rooms.js"}  # Allows pages to load their public scripts.
+PUBLIC_FILES = {
+    "badges.txt", "badge-picker.js", "badges.js", "ask.js", "profile.js",
+    "chat.js", "rooms.js", "verification-ui.js", "profile-page.js",
+    "qr-scanner.umd.min.js", "qr-scanner-worker.min.js",
+}  # Allows pages to load their public scripts.
 
 @app.get("/{name}")   # Matches approved browser assets like /badges.js and /profile.js.
 def public_file(name: str):
