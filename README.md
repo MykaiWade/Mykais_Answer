@@ -47,4 +47,10 @@ page.
 `email.txt` is only a sign-in example; it is not read by the app and does not
 create an account.
 
+To remove someone from the verified-member roster, delete their entire line
+from `verified.txt` and save the file before restarting the server. Startup
+will not recreate a removed line from the account database; that account will
+be treated as unverified. Removing a roster line does not delete the person's
+login or other data from the database.
+
 
