@@ -1174,6 +1174,34 @@ class NewPublicRoom(BaseModel):  # Validates the question submitted to create a 
     tags: list[str] = Field(default_factory=list)  # Holds the selected major and minor badges.
 
 
+@app.get("/api/questions/me")
+def my_questions(request: Request):
+    con = db()
+    profile = private_profile(con, request.cookies.get(SESSION_COOKIE))
+    if not profile:
+        con.close()
+        raise HTTPException(status_code=401, detail="Sign in to view your questions.")
+
+    rows = con.execute(
+        "SELECT id, question, description, created, tags FROM questions "
+        "WHERE user_id = ? ORDER BY id DESC",
+        (profile["user_id"],),
+    ).fetchall()
+    con.close()
+    return {
+        "questions": [
+            {
+                "id": row["id"],
+                "question": row["question"],
+                "description": row["description"],
+                "created": row["created"],
+                "tags": json.loads(row["tags"] or "[]"),
+            }
+            for row in rows
+        ]
+    }
+
+
 @app.post("/api/questions")   # This is the address ask.html sends the form to.
 def add_question(q: NewQuestion, request: Request):
     # Clean up the text: strip() removes extra spaces, [:200] cuts it to the size limit.
@@ -1664,7 +1692,7 @@ def styles():
 # CHANGE: add each browser asset here; rooms.js supplies public-room listing and creation behavior.
 PUBLIC_FILES = {
     "badges.txt", "badge-picker.js", "badges.js", "ask.js", "profile.js",
-    "chat.js", "rooms.js", "verification-ui.js", "profile-page.js",
+    "profile-view.js", "chat.js", "rooms.js", "verification-ui.js", "profile-page.js",
     "qr-scanner.umd.min.js", "qr-scanner-worker.min.js",
 }  # Allows pages to load their public scripts.
 

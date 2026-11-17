@@ -1,27 +1,30 @@
 <!DOCTYPE html>
-<!--
-- Shows account forms, the member's profile QR, camera scanner, and contacts.
-- profile.js handles account access; profile-page.js calls profile APIs in server.py.
-- The scanner library loaded below decodes QR images locally in the browser.
--->
+<!-- Shows account details, questions, profile QR sharing, camera scanning, and contacts. -->
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Profile</title>
+    <title>My Profile</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <h1>Profile</h1>
-    <p><a href="index.html">Home</a> | <a href="chat.html">Chat</a></p>
+    <h1>My Profile</h1>
+    <p>View your account, manage contacts, and see the questions you have asked.</p>
 
-    <section class="profile-panel" id="accountPanel">
-        <h2>Your account</h2>
-        <p>Your public name and member number can be shared. Your email stays private.</p>
+    <section class="profile-panel">
+        <h2>Account</h2>
+        <p>Your name is public. Your email is only used to sign in and is not shown here.</p>
+        <p>There is no password reset yet. Save your password somewhere safe.</p>
         <p id="profileStatus" role="status">Loading profile...</p>
+        <div id="profileDetails" hidden>
+            <p><strong>Name:</strong> <span id="profileName"></span></p>
+            <p><strong>Verification:</strong> <span id="profileVerification"></span></p>
+        </div>
+        <button type="button" id="resendVerificationButton" hidden>Send another verification QR</button>
+        <img id="verificationQrImage" class="profile-qr" alt="Verification QR code" hidden>
         <form id="registerForm">
             <div class="row">
-                <label for="realName">Name:</label>
+                <label for="realName">Real name:</label>
                 <input type="text" id="realName" maxlength="100" autocomplete="name" required>
             </div>
             <div class="row">
@@ -50,6 +53,12 @@
             <button type="button" id="showRegister">Create a new account</button>
         </form>
         <button type="button" id="logoutButton" hidden>Sign out</button>
+    </section>
+
+    <section class="profile-panel">
+        <h2>Questions I asked</h2>
+        <p id="questionsStatus" role="status">Sign in to see your questions.</p>
+        <div id="myQuestions"></div>
     </section>
 
     <section class="profile-panel" id="shareProfilePanel" hidden>
@@ -85,7 +94,9 @@
         <ul id="contactList"></ul>
     </section>
 
-    <script src="profile.js?v=20261116.4"></script>
+    <p><a href="index.html">Back to Home</a></p>
+    <script src="profile.js?v=20261117.1"></script>
+    <script src="profile-view.js"></script>
     <script src="qr-scanner.umd.min.js?v=1.4.2"></script>
     <script src="profile-page.js?v=20261116.3"></script>
 </body>
