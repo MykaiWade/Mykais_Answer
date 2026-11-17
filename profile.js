@@ -54,6 +54,24 @@
         }
     }
 
+    function readApiResponse(response, fallbackMessage) {
+        return response.text().then(function (text) {
+            var data;
+            try {
+                data = JSON.parse(text);
+            } catch (error) {
+                throw new Error(
+                    "The account service returned a webpage instead of JSON (HTTP "
+                    + response.status + "). Check that the server and its /api routes are available."
+                );
+            }
+            if (!response.ok) {
+                throw new Error(data.detail || fallbackMessage);
+            }
+            return data;
+        });
+    }
+
     function sendForm(form, url, details) {
         var button = form.querySelector("button[type='submit']");
         button.disabled = true;
@@ -65,12 +83,7 @@
             body: JSON.stringify(details)
         })
             .then(function (response) {
-                return response.json().then(function (data) {
-                    if (!response.ok) {
-                        throw new Error(data.detail || "The account request failed.");
-                    }
-                    return data;
-                });
+                return readApiResponse(response, "The account request failed.");
             })
             .then(function (data) {
                 profile = {
@@ -107,11 +120,12 @@
             if (!response.ok) {
                 throw new Error("Your sign-in could not be checked.");
             }
-            return response.json().then(function (data) {
-                profile = data;
-                showSignedIn();
-                return profile;
-            });
+            return readApiResponse(response, "Your sign-in could not be checked.")
+                .then(function (data) {
+                    profile = data;
+                    showSignedIn();
+                    return profile;
+                });
         })
         .catch(function (error) {
             status.textContent = error.message;
@@ -170,12 +184,7 @@
                 status.textContent = "Sending a new verification QR code...";
                 fetch("/api/verification/resend", { method: "POST" })
                     .then(function (response) {
-                        return response.json().then(function (data) {
-                            if (!response.ok) {
-                                throw new Error(data.detail || "A new QR code could not be sent.");
-                            }
-                            return data;
-                        });
+                        return readApiResponse(response, "A new QR code could not be sent.");
                     })
                     .then(function (data) {
                         status.textContent = data.message;
