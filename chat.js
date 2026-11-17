@@ -219,8 +219,17 @@
             showCallStatus("Wait for the chat connection before joining a call.");
             return;
         }
-        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        if (window.isSecureContext === false) {
             showCallStatus("Camera and microphone access requires HTTPS (or localhost).");
+            return;
+        }
+        if (!navigator.mediaDevices
+                || typeof navigator.mediaDevices.getUserMedia !== "function") {
+            showCallStatus(
+                "This browser does not provide camera and microphone access. "
+                + "Open the site in Safari or Chrome instead of an in-app browser, "
+                + "and make sure the browser is up to date."
+            );
             return;
         }
         if (typeof RTCPeerConnection !== "function") {
@@ -305,8 +314,11 @@
         }
 
         var author = document.createElement("strong");
-        author.textContent = (message.real_name || "Unknown member")
-            + (message.verified ? " — Verified" : " — Unverified");
+        author.textContent = window.SiteProfile.memberLabel(
+            message.real_name,
+            message.account_number,
+            message.verified
+        );
         bubble.appendChild(author);
 
         var body = document.createElement("div");

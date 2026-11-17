@@ -21,7 +21,8 @@
     <!-- Provides sign-in and account creation controls required for posting messages or rooms. -->
     <section class="profile-panel">
         <h2>Account</h2>
-        <p>Your name is public. Your email is only for signing in and is not verified.</p>
+        <p><a href="profile.html">Open your profile and contact QR.</a></p>
+        <p>Your name is public. Your email is private and is used to sign in and receive a verification QR code.</p>
         <p>There is no password reset yet. Save your password somewhere safe.</p>
         <!-- Shows the current sign-in state and account feedback from profile.js. -->
         <p id="profileStatus" role="status">Loading profile...</p>
@@ -64,6 +65,7 @@
         </form>
         <!-- Signs the current account out when the profile script enables this control. -->
         <button type="button" id="logoutButton" hidden>Sign out</button>
+        <button type="button" id="resendVerificationButton" hidden>Send another verification QR</button>
     </section>
 
     <!-- Visitors choose a badge before browsing; no public questions are listed before a choice. -->
@@ -157,7 +159,7 @@
     <p><a href="index.html">Back to Home</a></p>
 
     <!-- Loads shared account handling before the room page behavior. -->
-    <script src="profile.js"></script>
+    <script src="profile.js?v=20261116.4"></script>
     <!-- Loads the same reusable badge controls used on Ask and Chat. -->
     <script src="badge-picker.js"></script>
     <!-- Loads room creation, room rankings, and invitation-link behavior. -->

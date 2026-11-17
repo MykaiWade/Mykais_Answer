@@ -1,8 +1,5 @@
 <!DOCTYPE html>
-<!--
-- Shows the signed-in profile and the questions asked by that account.
-- Uses styles.css, profile.js, and profile-view.js with server.py's account and question APIs.
--->
+<!-- Shows account details, questions, profile QR sharing, camera scanning, and contacts. -->
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -12,7 +9,7 @@
 </head>
 <body>
     <h1>My Profile</h1>
-    <p>View your account details and the questions you have asked.</p>
+    <p>View your account, manage contacts, and see the questions you have asked.</p>
 
     <section class="profile-panel">
         <h2>Account</h2>
@@ -23,6 +20,8 @@
             <p><strong>Name:</strong> <span id="profileName"></span></p>
             <p><strong>Verification:</strong> <span id="profileVerification"></span></p>
         </div>
+        <button type="button" id="resendVerificationButton" hidden>Send another verification QR</button>
+        <img id="verificationQrImage" class="profile-qr" alt="Verification QR code" hidden>
         <form id="registerForm">
             <div class="row">
                 <label for="realName">Real name:</label>
@@ -34,7 +33,8 @@
             </div>
             <div class="row">
                 <label for="registerPassword">Password:</label>
-                <input type="password" id="registerPassword" minlength="12" maxlength="128" autocomplete="new-password" required>
+                <input type="password" id="registerPassword" minlength="12" maxlength="128"
+                    autocomplete="new-password" required>
             </div>
             <button type="submit">Create account</button>
             <button type="button" id="showLogin">Already have an account? Sign in</button>
@@ -42,11 +42,12 @@
         <form id="loginForm" hidden>
             <div class="row">
                 <label for="loginEmail">Email:</label>
-                <input type="email" id="loginEmail" maxlength="254" autocomplete="email" required>
+                <input type="email" id="loginEmail" maxlength="254" autocomplete="username" required>
             </div>
             <div class="row">
                 <label for="loginPassword">Password:</label>
-                <input type="password" id="loginPassword" maxlength="128" autocomplete="current-password" required>
+                <input type="password" id="loginPassword" maxlength="128"
+                    autocomplete="current-password" required>
             </div>
             <button type="submit">Sign in</button>
             <button type="button" id="showRegister">Create a new account</button>
@@ -60,8 +61,43 @@
         <div id="myQuestions"></div>
     </section>
 
+    <section class="profile-panel" id="shareProfilePanel" hidden>
+        <h2>Contacts</h2>
+        <p>Show your QR for someone to add you. Scanning adds both accounts to contacts. Only Mykai's verified #5 account can also verify an unverified member.</p>
+        <button type="button" id="showProfileQrButton">Show my QR code</button>
+        <img id="shareProfileQrImage" class="profile-qr" alt="QR code linking to your public profile" hidden>
+        <button type="button" id="openQrScannerButton">Open camera to scan a QR code</button>
+        <p id="scannerStatus" role="status"></p>
+        <div id="qrScannerPanel" hidden>
+            <video id="qrScannerVideo" autoplay playsinline></video>
+            <button type="button" id="stopQrScannerButton">Stop camera</button>
+        </div>
+    </section>
+
+    <section class="profile-panel" id="publicProfilePanel" hidden>
+        <h2>Member profile</h2>
+        <p id="publicProfileName"></p>
+        <p id="publicProfileStatus" role="status"></p>
+        <button type="button" id="addContactButton" hidden>Add to contacts</button>
+        <p id="verificationPrompt" hidden>Only verify this member if you know who they are.</p>
+        <button type="button" id="verifyScannedMemberButton" hidden>Verify this member</button>
+    </section>
+
+    <section class="profile-panel" id="contactsPanel" hidden>
+        <h2>Your contacts</h2>
+        <p id="contactsStatus" role="status"></p>
+        <h3>Contact requests</h3>
+        <ul id="incomingContactRequests"></ul>
+        <h3>Pending requests you sent</h3>
+        <ul id="outgoingContactRequests"></ul>
+        <h3>Contacts</h3>
+        <ul id="contactList"></ul>
+    </section>
+
     <p><a href="index.html">Back to Home</a></p>
-    <script src="profile.js"></script>
+    <script src="profile.js?v=20261116.4"></script>
     <script src="profile-view.js"></script>
+    <script src="qr-scanner.umd.min.js?v=1.4.2"></script>
+    <script src="profile-page.js?v=20261116.3"></script>
 </body>
 </html>

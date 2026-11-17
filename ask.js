@@ -39,8 +39,11 @@ function showMatches(matches, questionId) {
         card.appendChild(title);
 
         var author = document.createElement("span");
-        author.textContent = "Asked by " + match.real_name
-            + (match.verified ? " — Verified" : " — Unverified");
+        author.textContent = "Asked by " + window.SiteProfile.memberLabel(
+            match.real_name,
+            match.account_number,
+            match.verified
+        );
         card.appendChild(author);
 
         if (match.description) {
