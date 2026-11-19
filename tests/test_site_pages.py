@@ -46,6 +46,15 @@ class SitePageTests(unittest.TestCase):
                     self.assertTrue(target.is_relative_to(ROOT))
                     self.assertTrue(target.is_file())
 
+    def test_chat_call_exposes_screen_sharing(self):
+        # Verify that both the control and its WebRTC screen-sharing API exist.
+        chat_html = (ROOT / "chat.html").read_text(encoding="utf-8")
+        chat_js = (ROOT / "chat.js").read_text(encoding="utf-8")
+
+        self.assertIn('id="shareScreenButton"', chat_html)
+        self.assertIn("getDisplayMedia", chat_js)
+        self.assertIn("replaceTrack", chat_js)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -127,6 +127,11 @@
             border-radius: 6px; /* Slightly soften the video frame corners. */
          }
 
+         .call-videos video.sharing-screen {
+            /* Keep a shared screen or window fully visible instead of cropping it. */
+            object-fit: contain; /* Keep the shared desktop or window fully visible. */
+         }
+
          /* Stack the previews on narrow phones so each remains large enough to see. */
          @media (max-width: 480px) {
             .call-videos { grid-template-columns: 1fr; } /* Switch to one column below 480px. */

@@ -107,11 +107,14 @@
     <!-- Small WebRTC mesh calls are limited to four participants in this prototype. -->
     <section id="callSection" class="profile-panel" hidden aria-labelledby="callHeading">
         <h2 id="callHeading">Audio and video call</h2>
-        <p>Experimental calls support up to four people. Camera and microphone are shared live with people who join the call; this site does not record calls.</p>
+        <!-- Explains the call's live media scope, including optional screen sharing. -->
+        <p>Experimental calls support up to four people. Camera, microphone, and a chosen screen or window are shared live with people who join the call; this site does not record calls.</p>
         <button type="button" id="joinCallButton" disabled>Join audio/video call</button>
         <button type="button" id="joinAudioButton" disabled>Join audio-only call</button>
         <button type="button" id="muteCallButton" disabled>Mute microphone</button>
         <button type="button" id="cameraCallButton" disabled>Turn camera off</button>
+        <!-- Lets a connected participant share a screen or application window. -->
+        <button type="button" id="shareScreenButton" disabled>Share screen</button>
         <button type="button" id="leaveCallButton" hidden>Leave call</button>
         <p id="callStatus" role="status">Sign in and connect to join a call.</p>
         <div id="callVideos" class="call-videos" hidden>

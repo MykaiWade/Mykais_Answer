@@ -25,6 +25,8 @@
     var joinAudioButton = document.getElementById("joinAudioButton");
     var muteCallButton = document.getElementById("muteCallButton");
     var cameraCallButton = document.getElementById("cameraCallButton");
+    // Finds the control used to start or stop sharing a screen.
+    var shareScreenButton = document.getElementById("shareScreenButton");
     var leaveCallButton = document.getElementById("leaveCallButton");
     var callVideos = document.getElementById("callVideos");
     var localVideo = document.getElementById("localVideo");
@@ -33,6 +35,8 @@
     var hasValidRoom = room && /^(?:\d+-\d+|question-\d+)$/.test(room); // Accepts legacy pair rooms and public question rooms.
     var socket = null;
     var callStream = null;
+    // Keeps a separate screen stream so it can replace the camera video track.
+    var screenStream = null;
     var callParticipantId = null;
     var callPeers = Object.create(null);
 
@@ -98,9 +102,17 @@
         };
         callPeers[participantId] = peer;
 
-        callStream.getTracks().forEach(function (track) {
+        // Audio always comes from the call's microphone, not the screen capture.
+        callStream.getAudioTracks().forEach(function (track) {
             connection.addTrack(track, callStream);
         });
+        // Sends screen video when it is active, otherwise sends the camera.
+        var videoTrack = screenStream
+            ? screenStream.getVideoTracks()[0]
+            : callStream.getVideoTracks()[0];
+        if (videoTrack) {
+            connection.addTrack(videoTrack, screenStream || callStream);
+        }
         connection.ontrack = function (event) {
             if (event.streams[0]) {
                 video.srcObject = event.streams[0];
@@ -192,6 +204,13 @@
         }
         callParticipantId = null;
         Object.keys(callPeers).forEach(removeCallPeer);
+        // Stop the browser's screen capture before the call is fully reset.
+        if (screenStream) {
+            screenStream.getTracks().forEach(function (track) {
+                track.stop();
+            });
+            screenStream = null;
+        }
         if (callStream) {
             callStream.getTracks().forEach(function (track) {
                 track.stop();
@@ -199,6 +218,7 @@
             callStream = null;
         }
         localVideo.srcObject = null;
+        localVideo.classList.remove("sharing-screen");
         remoteVideos.innerHTML = "";
         callVideos.hidden = true;
         joinCallButton.hidden = false;
@@ -207,6 +227,9 @@
         joinAudioButton.disabled = joinCallButton.disabled;
         muteCallButton.disabled = true;
         cameraCallButton.disabled = true;
+        // Restore the screen-sharing control to its idle state.
+        shareScreenButton.disabled = true;
+        shareScreenButton.textContent = "Share screen";
         leaveCallButton.hidden = true;
     }
 
@@ -293,6 +316,10 @@
             return;
         }
         var videoTracks = callStream.getVideoTracks();
+        // Camera controls stay disabled while screen video is taking the video track.
+        if (screenStream) {
+            return;
+        }
         var enabled = videoTracks.some(function (track) {
             return track.enabled;
         });
@@ -300,6 +327,112 @@
             track.enabled = !enabled;
         });
         cameraCallButton.textContent = enabled ? "Turn camera on" : "Turn camera off";
+    });
+
+    // Stops a display capture and sends the camera track back to every peer.
+    function stopScreenShare() {
+        if (!screenStream) {
+            return;
+        }
+        // Stop the browser capture and remove the active screen stream reference.
+        var screenTrack = screenStream.getVideoTracks()[0];
+        screenStream = null;
+        if (screenTrack) {
+            screenTrack.stop();
+        }
+
+        // Replace the shared screen with the camera, if the user joined with one.
+        var cameraTrack = callStream ? callStream.getVideoTracks()[0] : null;
+        Object.keys(callPeers).forEach(function (participantId) {
+            var senders = callPeers[participantId].connection.getSenders();
+            senders.forEach(function (sender) {
+                if (sender.track && sender.track.kind === "video") {
+                    // replaceTrack swaps video without recreating the whole peer connection.
+                    sender.replaceTrack(cameraTrack);
+                }
+            });
+        });
+
+        // Restore the local preview and the appropriate camera control state.
+        if (cameraTrack) {
+            localVideo.srcObject = callStream;
+            localVideo.classList.remove("sharing-screen");
+            cameraCallButton.disabled = false;
+        } else {
+            localVideo.srcObject = null;
+            localVideo.classList.remove("sharing-screen");
+            cameraCallButton.disabled = true;
+        }
+        shareScreenButton.textContent = "Share screen";
+        showCallStatus("Screen sharing stopped.");
+    }
+
+    // Ask the browser to capture a screen or window only after a call is joined.
+    shareScreenButton.addEventListener("click", function () {
+        if (screenStream) {
+            stopScreenShare();
+            return;
+        }
+        // getDisplayMedia is unavailable in some browsers or non-secure contexts.
+        if (!callParticipantId || !navigator.mediaDevices
+                || typeof navigator.mediaDevices.getDisplayMedia !== "function") {
+            showCallStatus("Screen sharing is not available in this browser.");
+            return;
+        }
+
+        // The browser permission prompt is opened only by this explicit button click.
+        navigator.mediaDevices.getDisplayMedia({ video: true })
+            .then(function (stream) {
+                var track = stream.getVideoTracks()[0];
+                if (!track) {
+                    // Refuse an incomplete capture and stop any returned tracks.
+                    stream.getTracks().forEach(function (item) {
+                        item.stop();
+                    });
+                    throw new Error("No screen track was returned.");
+                }
+                // Save the screen stream separately from the camera and microphone stream.
+                screenStream = stream;
+                track.contentHint = "detail";
+                // Use contain cropping for the local preview so the full screen remains visible.
+                localVideo.classList.add("sharing-screen");
+
+                // Swap screen video into every existing peer connection.
+                Object.keys(callPeers).forEach(function (participantId) {
+                    var peer = callPeers[participantId];
+                    var sender = peer.connection.getSenders().find(function (item) {
+                        return item.track && item.track.kind === "video";
+                    });
+                    if (sender) {
+                        // A successful replaceTrack keeps the existing WebRTC connection intact.
+                        sender.replaceTrack(track).catch(function (error) {
+                            showCallStatus("Could not share the screen: " + error.message);
+                        });
+                    } else {
+                        // Add a video track if this peer has no camera or screen track yet.
+                        peer.connection.addTrack(track, stream);
+                    }
+                });
+
+                // Show the chosen screen in the sharer's local preview.
+                localVideo.srcObject = stream;
+                shareScreenButton.textContent = "Stop sharing";
+                cameraCallButton.disabled = true;
+                showCallStatus("Your screen is being shared in the call.");
+
+                // Handle the browser's built-in Stop sharing control as a normal stop.
+                track.addEventListener("ended", function () {
+                    stopScreenShare();
+                });
+            })
+            .catch(function (error) {
+                // Report denial separately from other browser or network errors.
+                if (error.name !== "NotAllowedError") {
+                    showCallStatus("Could not start screen sharing: " + error.message);
+                } else {
+                    showCallStatus("Screen sharing was canceled.");
+                }
+            });
     });
 
     /* Add one chat message to the visible conversation. */
@@ -568,6 +701,8 @@
                 leaveCallButton.hidden = false;
                 muteCallButton.disabled = false;
                 cameraCallButton.disabled = callStream.getVideoTracks().length === 0;
+                // Enable sharing only after this participant has joined the call.
+                shareScreenButton.disabled = false;
                 data.peers.forEach(function (peer) {
                     createCallPeer(peer.id, peer.real_name, callParticipantId < peer.id);
                 });
