@@ -62,7 +62,8 @@
         }
 
         profileName.textContent = profile.real_name;
-        profileVerification.textContent = profile.verified ? "Verified" : "Unverified";
+        profileVerification.textContent = (profile.verified ? "Verified" : "Unverified")
+            + (profile.online ? " — Online" : " — Offline");
         questionsStatus.textContent = "Loading your questions...";
 
         fetch("/api/questions/me")
@@ -84,4 +85,11 @@
 
     window.SiteProfile.ready.then(loadQuestions);
     window.addEventListener("profilechange", loadQuestions);
+    window.addEventListener("presencechange", function (event) {
+        var profile = window.SiteProfile.current();
+        if (profile) {
+            profileVerification.textContent = (profile.verified ? "Verified" : "Unverified")
+                + (event.detail.online ? " — Online" : " — Offline");
+        }
+    });
 })();

@@ -243,6 +243,46 @@ class VerificationApiTests(unittest.TestCase):
         self.assertEqual(len(self.other_client.get("/api/contacts").json()["contacts"]), 1)
         self.assertEqual(len(self.client.get("/api/contacts").json()["contacts"]), 1)
 
+    def test_presence_updates_and_expires_after_five_minutes(self):
+        self.assertTrue(self.server.profile_is_online(700, now=1000))
+        self.assertFalse(self.server.profile_is_online(699.999, now=1000))
+        self.assertEqual(self.anonymous_client.get("/presence.js").status_code, 200)
+
+        origin = {"Origin": "https://mykaianswer.test"}
+        login = self.client.post(
+            "/api/auth/login",
+            headers=origin,
+            json={
+                "email": "mykai@example.test",
+                "password": "MykaiTestPassword123!",
+            },
+        )
+        self.assertEqual(login.status_code, 200, login.text)
+        self.assertTrue(login.json()["online"])
+
+        activity = self.client.post("/api/activity", headers=origin)
+        self.assertEqual(activity.status_code, 200, activity.text)
+        self.assertTrue(activity.json()["online"])
+
+        public_id = login.json()["public_id"]
+        public_profile = self.anonymous_client.get(
+            "/api/public-profile/" + public_id
+        )
+        self.assertTrue(public_profile.json()["online"])
+
+        con = self.server.db()
+        con.execute(
+            "UPDATE profiles SET last_active = ? WHERE user_id = ?",
+            (time.time() - self.server.ONLINE_TIMEOUT - 1, login.json()["user_id"]),
+        )
+        con.commit()
+        con.close()
+
+        public_profile = self.anonymous_client.get(
+            "/api/public-profile/" + public_id
+        )
+        self.assertFalse(public_profile.json()["online"])
+
     def test_questions_are_appended_and_remain_visible_to_their_author(self):
         origin = {"Origin": "https://mykaianswer.test"}
         login = self.client.post(

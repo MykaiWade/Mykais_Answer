@@ -42,7 +42,8 @@ function showMatches(matches, questionId) {
         author.textContent = "Asked by " + window.SiteProfile.memberLabel(
             match.real_name,
             match.account_number,
-            match.verified
+            match.verified,
+            match.online
         );
         card.appendChild(author);
 

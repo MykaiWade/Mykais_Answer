@@ -69,6 +69,7 @@ MAX_QUESTION = 100      # Most characters allowed in a question.
 MAX_DESCRIPTION = 200  # Most characters allowed in a description.
 MAX_MESSAGE = 500       # Most characters allowed in one chat message.
 SESSION_DAYS = 30        # How long a sign-in stays active on this browser.
+ONLINE_TIMEOUT = 5 * 60  # A profile is offline after five minutes without site activity.
 PASSWORD_ITERATIONS = 310_000  # PBKDF2 work factor used to store passwords safely.
 SESSION_COOKIE = "mykais_session"
 
@@ -120,6 +121,8 @@ def setup_database():
         con.execute("ALTER TABLE profiles ADD COLUMN account_number INTEGER")
     if "public_id" not in profile_columns:
         con.execute("ALTER TABLE profiles ADD COLUMN public_id TEXT")
+    if "last_active" not in profile_columns:
+        con.execute("ALTER TABLE profiles ADD COLUMN last_active REAL")
     con.execute(
         "CREATE UNIQUE INDEX IF NOT EXISTS profiles_public_id_unique "
         "ON profiles(public_id) WHERE public_id IS NOT NULL"
@@ -219,6 +222,13 @@ def roster_verified(account_number, real_name, entries=None):
         and entry.name.casefold() == real_name.casefold()
         and entry.verified
     )
+
+
+def profile_is_online(last_active, now=None):
+    if last_active is None:
+        return False
+    current_time = time.time() if now is None else now
+    return last_active >= current_time - ONLINE_TIMEOUT
 
 
 def synchronize_verification_roster():
@@ -354,7 +364,7 @@ def private_profile(con, token):
     token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
     profile = con.execute(
         "SELECT profiles.user_id, profiles.real_name, profiles.account_number, "
-        "profiles.public_id "
+        "profiles.public_id, profiles.last_active "
         "FROM sessions JOIN profiles ON profiles.user_id = sessions.user_id "
         "WHERE sessions.token_hash = ? AND sessions.expires > ?",
         (token_hash, time.time()),
@@ -366,6 +376,7 @@ def private_profile(con, token):
         "real_name": profile["real_name"],
         "account_number": profile["account_number"],
         "public_id": profile["public_id"],
+        "online": profile_is_online(profile["last_active"]),
         "verified": roster_verified(
             profile["account_number"], profile["real_name"]
         ),
@@ -393,6 +404,10 @@ def finish_login(con, user_id, request, message, extra=None):
         "INSERT INTO sessions (token_hash, user_id, expires) VALUES (?, ?, ?)",
         (token_hash, user_id, time.time() + SESSION_DAYS * 24 * 60 * 60),
     )
+    con.execute(
+        "UPDATE profiles SET last_active = ? WHERE user_id = ?",
+        (time.time(), user_id),
+    )
     profile = con.execute(
         "SELECT user_id, real_name, account_number, public_id "
         "FROM profiles WHERE user_id = ?",
@@ -405,6 +420,7 @@ def finish_login(con, user_id, request, message, extra=None):
         "real_name": profile["real_name"],
         "account_number": profile["account_number"],
         "public_id": profile["public_id"],
+        "online": True,
         "verified": roster_verified(
             profile["account_number"], profile["real_name"]
         ),
@@ -596,6 +612,7 @@ def current_account(request: Request):
         "real_name": profile["real_name"],
         "account_number": profile["account_number"],
         "public_id": profile["public_id"],
+        "online": bool(profile["online"]),
         "verified": bool(profile["verified"]),
     }
 
@@ -605,7 +622,7 @@ def get_public_profile(public_id: str, request: Request):
     con = db()
     try:
         target = con.execute(
-            "SELECT user_id, real_name, account_number, public_id "
+            "SELECT user_id, real_name, account_number, public_id, last_active "
             "FROM profiles WHERE public_id = ?",
             (public_id,),
         ).fetchone()
@@ -643,6 +660,7 @@ def get_public_profile(public_id: str, request: Request):
             "verified": roster_verified(
                 target["account_number"], target["real_name"]
             ),
+            "online": profile_is_online(target["last_active"]),
             "relationship": relationship,
             "can_verify": bool(
                 viewer
@@ -672,6 +690,24 @@ def require_same_origin(request):
         raise HTTPException(status_code=403, detail="Verification requires a secure page.")
 
 
+@app.post("/api/activity")
+def record_activity(request: Request):
+    require_same_origin(request)
+    con = db()
+    try:
+        profile = private_profile(con, request.cookies.get(SESSION_COOKIE))
+        if not profile:
+            return {"online": False}
+        con.execute(
+            "UPDATE profiles SET last_active = ? WHERE user_id = ?",
+            (time.time(), profile["user_id"]),
+        )
+        con.commit()
+        return {"online": True}
+    finally:
+        con.close()
+
+
 def require_verifier(con, request):
     profile = private_profile(con, request.cookies.get(SESSION_COOKIE))
     if not profile:
@@ -689,7 +725,7 @@ def require_verifier(con, request):
 
 def contact_card(con, user_id):
     row = con.execute(
-        "SELECT user_id, real_name, account_number, public_id "
+        "SELECT user_id, real_name, account_number, public_id, last_active "
         "FROM profiles WHERE user_id = ?",
         (user_id,),
     ).fetchone()
@@ -698,6 +734,7 @@ def contact_card(con, user_id):
         "real_name": row["real_name"],
         "account_number": row["account_number"],
         "verified": roster_verified(row["account_number"], row["real_name"]),
+        "online": profile_is_online(row["last_active"]),
     }
 
 
@@ -1141,7 +1178,18 @@ def logout_account(request: Request):
     con = db()
     if token:
         token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+        session = con.execute(
+            "SELECT user_id FROM sessions WHERE token_hash = ?", (token_hash,)
+        ).fetchone()
         con.execute("DELETE FROM sessions WHERE token_hash = ?", (token_hash,))
+        if session and not con.execute(
+            "SELECT 1 FROM sessions WHERE user_id = ? AND expires > ? LIMIT 1",
+            (session["user_id"], time.time()),
+        ).fetchone():
+            con.execute(
+                "UPDATE profiles SET last_active = NULL WHERE user_id = ?",
+                (session["user_id"],),
+            )
         con.commit()
     con.close()
     response = JSONResponse({"message": "Signed out."})
@@ -1257,7 +1305,8 @@ def add_question(q: NewQuestion, request: Request):
     # CHANGE: "LIMIT 500" = only compare against the 500 newest. Raise it for more matches (slower).
     others = con.execute(
         "SELECT questions.id, questions.question, questions.description, questions.tags, "
-        "profiles.real_name, profiles.account_number FROM questions "
+        "profiles.real_name, profiles.account_number, profiles.last_active "
+        "FROM questions "
         "LEFT JOIN profiles ON profiles.user_id = questions.user_id "
         "WHERE questions.user_id != ? ORDER BY questions.id DESC LIMIT 500",
         (user_id,),
@@ -1284,6 +1333,7 @@ def add_question(q: NewQuestion, request: Request):
                 "verified": roster_verified(
                     row["account_number"], row["real_name"] or ""
                 ),
+                "online": profile_is_online(row["last_active"]),
             })
 
     # Sort best match first.
@@ -1550,6 +1600,7 @@ async def chat(ws: WebSocket, room: str):
             "real_name": profile["real_name"],
             "account_number": profile["account_number"],
             "verified": bool(profile["verified"]),
+            "online": bool(profile["online"]),
         })
 
     # Send the last 50 saved messages so a new window isn't empty.
@@ -1557,7 +1608,7 @@ async def chat(ws: WebSocket, room: str):
     con = db()
     history = con.execute(
         "SELECT messages.user_id, messages.text, profiles.real_name, "
-        "profiles.account_number "
+        "profiles.account_number, profiles.last_active "
         "FROM messages LEFT JOIN profiles ON profiles.user_id = messages.user_id "
         "WHERE messages.room = ? ORDER BY messages.id DESC LIMIT 50",
         (room,),
@@ -1572,6 +1623,7 @@ async def chat(ws: WebSocket, room: str):
             "verified": roster_verified(
                 m["account_number"], m["real_name"] or ""
             ),
+            "online": profile_is_online(m["last_active"]),
         })
 
     open_chat_members.setdefault(room, {})[ws] = (  # Adds this connection to live room presence counts.
@@ -1672,12 +1724,18 @@ async def chat(ws: WebSocket, room: str):
 
             # Save the message permanently.
             con = db()
+            message_created = time.time()
+            con.execute(
+                "UPDATE profiles SET last_active = ? WHERE user_id = ?",
+                (message_created, user_id),
+            )
             con.execute(
                 "INSERT INTO messages (room, user_id, text, created) VALUES (?, ?, ?, ?)",
-                (room, user_id, text, time.time()),
+                (room, user_id, text, message_created),
             )
             con.commit()
             con.close()
+            profile["online"] = True
 
             # Deliver it to everyone in the room, including the sender (so it shows on their screen too).
             for client in list(open_chats[room]):
@@ -1687,6 +1745,7 @@ async def chat(ws: WebSocket, room: str):
                     "real_name": profile["real_name"],
                     "account_number": profile["account_number"],
                     "verified": bool(profile["verified"]),
+                    "online": bool(profile["online"]),
                 })
     except WebSocketDisconnect:
         # The visitor closed the page: remove them from the room.
@@ -1735,6 +1794,7 @@ def styles():
 PUBLIC_FILES = {
     "badges.txt", "badge-picker.js", "badges.js", "ask.js", "profile.js",
     "profile-view.js", "chat.js", "rooms.js", "verification-ui.js", "profile-page.js",
+    "presence.js",
     "qr-scanner.umd.min.js", "qr-scanner-worker.min.js",
 }  # Allows pages to load their public scripts.
 

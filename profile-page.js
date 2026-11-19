@@ -48,7 +48,8 @@
         if (member.account_number !== null && member.account_number !== undefined) {
             label += " " + member.account_number;
         }
-        return label + (member.verified ? " # — Verified" : " — Unverified");
+        return label + (member.verified ? " # — Verified" : " — Unverified")
+            + (member.online ? " — Online" : " — Offline");
     }
 
     function contactLink(member) {

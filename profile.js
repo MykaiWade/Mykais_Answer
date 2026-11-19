@@ -13,12 +13,13 @@
     var verificationQrImage = document.getElementById("verificationQrImage");
     var isProfilePage = Boolean(document.getElementById("showProfileQrButton"));
 
-    function memberLabel(realName, accountNumber, verified) {
+    function memberLabel(realName, accountNumber, verified, online) {
         var label = realName || "Unknown member";
         if (accountNumber !== null && accountNumber !== undefined) {
             label += " " + accountNumber;
         }
-        return label + (verified ? " # — Verified" : " — Unverified");
+        return label + (verified ? " # — Verified" : " — Unverified")
+            + (online ? " — Online" : " — Offline");
     }
 
     function showSignedOut() {
@@ -41,7 +42,8 @@
         status.textContent = "Signed in as " + memberLabel(
             profile.real_name,
             profile.account_number,
-            profile.verified
+            profile.verified,
+            profile.online
         );
         registerForm.hidden = true;
         loginForm.hidden = true;
@@ -91,7 +93,8 @@
                     real_name: data.real_name,
                     account_number: data.account_number,
                     public_id: data.public_id,
-                    verified: data.verified
+                    verified: data.verified,
+                    online: data.online
                 };
                 oldProfileId = null;
                 localStorage.removeItem("user_id");
@@ -212,4 +215,11 @@
         current: function () { return profile; },
         memberLabel: memberLabel
     };
+
+    window.addEventListener("presencechange", function (event) {
+        if (profile) {
+            profile.online = event.detail.online;
+            showSignedIn();
+        }
+    });
 })();

@@ -672,7 +672,8 @@
         author.textContent = window.SiteProfile.memberLabel(
             message.real_name,
             message.account_number,
-            message.verified
+            message.verified,
+            message.online
         );
         bubble.appendChild(author);
 
