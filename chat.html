@@ -16,7 +16,7 @@
 
     <!-- The text on the browser tab. CHANGE: edit the word between the tags. -->
     <title>Chat</title>
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="styles.css?v=20261119.1">
 </head>
 <body>
     <!-- BODY = everything visitors see, top to bottom. -->
@@ -115,6 +115,10 @@
         <button type="button" id="cameraCallButton" disabled>Turn camera off</button>
         <!-- Lets a connected participant share a screen or application window. -->
         <button type="button" id="shareScreenButton" disabled>Share screen</button>
+        <button type="button" id="pictureInPictureButton" disabled>
+            Show call video in Picture in Picture
+        </button>
+        <p>Picture in Picture combines your camera and call participants when supported. Use the floating window's restore control to return to this page; closing the floating window does not leave the call.</p>
         <button type="button" id="leaveCallButton" hidden>Leave call</button>
         <p id="callStatus" role="status">Sign in and connect to join a call.</p>
         <div id="callVideos" class="call-videos" hidden>
@@ -124,6 +128,15 @@
             </div>
             <div id="remoteVideos" class="call-remote-videos"></div>
         </div>
+        <video
+            id="pictureInPictureVideo"
+            class="call-pip-source"
+            autoplay
+            playsinline
+            muted
+            aria-hidden="true"
+            tabindex="-1"
+        ></video>
     </section>
 
     <!-- chat.js adds saved and new messages here. -->
@@ -144,5 +157,5 @@
     <script src="profile.js?v=20261117.1"></script>
     <!-- Loads the shared major/minor badge controls used by the public question filter. -->
     <script src="badge-picker.js"></script>
-    <script src="chat.js?v=20261116.2"></script>
+    <script src="chat.js?v=20261119.1"></script>
 </body>

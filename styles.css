@@ -133,6 +133,16 @@
             gap: 8px; /* Separate the participant tiles. */
          }
 
+         .call-pip-source {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 1px;
+            height: 1px;
+            opacity: 0;
+            pointer-events: none;
+         }
+
          .call-video span {
             display: block; /* Put each participant's name below their video. */
             margin-top: 4px; /* Add a little space below the video. */

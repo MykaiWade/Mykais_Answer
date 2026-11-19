@@ -1,6 +1,5 @@
-// File of all questions asked in Mykai's answer. Will update once questions are verifed or asked by those who are verifed.
-// These questions are stored once and will show how times the question was asked.
-// Can be used as pre selected questions people can choose and fill into.
+// Questions submitted on the site are appended here automatically.
+// Existing entries can also be used as preselected questions people can choose and fill in.
 
 What is the answer to this math question?
 What is the answer to this question?

@@ -27,10 +27,25 @@
     var cameraCallButton = document.getElementById("cameraCallButton");
     // Finds the control used to start or stop sharing a screen.
     var shareScreenButton = document.getElementById("shareScreenButton");
+    var pictureInPictureButton = document.getElementById("pictureInPictureButton");
     var leaveCallButton = document.getElementById("leaveCallButton");
     var callVideos = document.getElementById("callVideos");
     var localVideo = document.getElementById("localVideo");
     var remoteVideos = document.getElementById("remoteVideos");
+    var pictureInPictureVideo = document.getElementById("pictureInPictureVideo");
+    var pictureInPictureSelfVideo = document.createElement("video");
+    pictureInPictureSelfVideo.autoplay = true;
+    pictureInPictureSelfVideo.muted = true;
+    pictureInPictureSelfVideo.playsInline = true;
+    pictureInPictureSelfVideo.className = "call-pip-source";
+    pictureInPictureSelfVideo.setAttribute("aria-hidden", "true");
+    callSection.appendChild(pictureInPictureSelfVideo);
+    var pictureInPictureCanvas = document.createElement("canvas");
+    pictureInPictureCanvas.width = 640;
+    pictureInPictureCanvas.height = 480;
+    var pictureInPictureContext = pictureInPictureCanvas.getContext("2d");
+    var pictureInPictureStream = null;
+    var pictureInPictureTimer = null;
     var room = new URLSearchParams(window.location.search).get("room");
     var hasValidRoom = room && /^(?:\d+-\d+|question-\d+)$/.test(room); // Accepts legacy pair rooms and public question rooms.
     var socket = null;
@@ -46,6 +61,153 @@
 
     function showCallStatus(message) {
         callStatus.textContent = message;
+    }
+
+    function supportsPictureInPicture() {
+        return Boolean(
+            pictureInPictureContext
+            && typeof pictureInPictureCanvas.captureStream === "function"
+            && (
+                typeof pictureInPictureVideo.requestPictureInPicture === "function"
+                || typeof pictureInPictureVideo.webkitSetPresentationMode === "function"
+            )
+        );
+    }
+
+    function isPictureInPictureActive() {
+        return document.pictureInPictureElement === pictureInPictureVideo
+            || pictureInPictureVideo.webkitPresentationMode === "picture-in-picture";
+    }
+
+    function drawPictureInPictureFrame() {
+        var participants = [{
+            label: "You",
+            video: pictureInPictureSelfVideo,
+            track: callStream && callStream.getVideoTracks()[0]
+        }];
+        Array.prototype.forEach.call(
+            remoteVideos.querySelectorAll(".call-video"),
+            function (tile) {
+                participants.push({
+                    label: tile.querySelector("span").textContent,
+                    video: tile.querySelector("video"),
+                    track: tile.querySelector("video").srcObject
+                        ? tile.querySelector("video").srcObject.getVideoTracks()[0]
+                        : null
+                });
+            }
+        );
+
+        var canvasWidth = pictureInPictureCanvas.width;
+        var canvasHeight = pictureInPictureCanvas.height;
+        var columns = participants.length > 1 ? 2 : 1;
+        var rows = Math.ceil(participants.length / columns);
+        var tileWidth = canvasWidth / columns;
+        var tileHeight = canvasHeight / rows;
+        pictureInPictureContext.fillStyle = "#111";
+        pictureInPictureContext.fillRect(0, 0, canvasWidth, canvasHeight);
+
+        participants.forEach(function (participant, index) {
+            var x = (index % columns) * tileWidth;
+            var y = Math.floor(index / columns) * tileHeight;
+            var video = participant.video;
+            var hasVideo = participant.track && participant.track.enabled
+                && participant.track.readyState === "live"
+                && video.readyState >= 2 && video.videoWidth && video.videoHeight;
+
+            pictureInPictureContext.fillStyle = "#222";
+            pictureInPictureContext.fillRect(x, y, tileWidth, tileHeight);
+            if (hasVideo) {
+                var scale = Math.min(
+                    (tileWidth - 16) / video.videoWidth,
+                    (tileHeight - 44) / video.videoHeight
+                );
+                var width = video.videoWidth * scale;
+                var height = video.videoHeight * scale;
+                pictureInPictureContext.drawImage(
+                    video,
+                    x + (tileWidth - width) / 2,
+                    y + (tileHeight - height) / 2,
+                    width,
+                    height
+                );
+            } else {
+                pictureInPictureContext.fillStyle = "#fff";
+                pictureInPictureContext.font = "20px sans-serif";
+                pictureInPictureContext.textAlign = "center";
+                pictureInPictureContext.fillText(
+                    "Camera off",
+                    x + tileWidth / 2,
+                    y + tileHeight / 2
+                );
+            }
+
+            pictureInPictureContext.fillStyle = "rgba(0, 0, 0, 0.7)";
+            pictureInPictureContext.fillRect(x, y + tileHeight - 36, tileWidth, 36);
+            pictureInPictureContext.fillStyle = "#fff";
+            pictureInPictureContext.font = "18px sans-serif";
+            pictureInPictureContext.textAlign = "left";
+            pictureInPictureContext.fillText(
+                participant.label,
+                x + 10,
+                y + tileHeight - 12,
+                tileWidth - 20
+            );
+        });
+    }
+
+    function preparePictureInPicture() {
+        if (!supportsPictureInPicture()) {
+            pictureInPictureButton.disabled = true;
+            return;
+        }
+
+        pictureInPictureStream = pictureInPictureCanvas.captureStream(10);
+        pictureInPictureVideo.srcObject = pictureInPictureStream;
+        var selfVideoTracks = callStream ? callStream.getVideoTracks() : [];
+        pictureInPictureSelfVideo.srcObject = selfVideoTracks.length
+            ? new MediaStream(selfVideoTracks)
+            : null;
+        pictureInPictureTimer = window.setInterval(drawPictureInPictureFrame, 100);
+        pictureInPictureVideo.play().catch(function () {
+            showCallStatus("Could not prepare the call video for Picture in Picture.");
+        });
+        if (pictureInPictureSelfVideo.srcObject) {
+            pictureInPictureSelfVideo.play().catch(function () {
+                showCallStatus("Could not prepare your camera preview for Picture in Picture.");
+            });
+        }
+        pictureInPictureButton.disabled = false;
+    }
+
+    function stopPictureInPicturePreview() {
+        if (pictureInPictureTimer !== null) {
+            window.clearInterval(pictureInPictureTimer);
+            pictureInPictureTimer = null;
+        }
+        if (document.pictureInPictureElement === pictureInPictureVideo
+                && typeof document.exitPictureInPicture === "function") {
+            document.exitPictureInPicture().catch(function (error) {
+                showCallStatus("Could not close Picture in Picture: " + error.message);
+            });
+        } else if (pictureInPictureVideo.webkitPresentationMode === "picture-in-picture"
+                && typeof pictureInPictureVideo.webkitSetPresentationMode === "function") {
+            try {
+                pictureInPictureVideo.webkitSetPresentationMode("inline");
+            } catch (error) {
+                showCallStatus("Could not close Picture in Picture: " + error.message);
+            }
+        }
+        if (pictureInPictureStream) {
+            pictureInPictureStream.getTracks().forEach(function (track) {
+                track.stop();
+            });
+            pictureInPictureStream = null;
+        }
+        pictureInPictureVideo.srcObject = null;
+        pictureInPictureSelfVideo.srcObject = null;
+        pictureInPictureButton.disabled = true;
+        pictureInPictureButton.textContent = "Show call video in Picture in Picture";
     }
 
     /* Use a small WebRTC mesh for this prototype; the server only relays setup data. */
@@ -202,6 +364,7 @@
                 && socket.readyState === WebSocket.OPEN) {
             socket.send(JSON.stringify({ type: "call-leave" }));
         }
+        stopPictureInPicturePreview();
         callParticipantId = null;
         Object.keys(callPeers).forEach(removeCallPeer);
         // Stop the browser's screen capture before the call is fully reset.
@@ -297,6 +460,53 @@
     leaveCallButton.addEventListener("click", function () {
         resetCall(true);
         showCallStatus("You left the call.");
+    });
+    pictureInPictureButton.addEventListener("click", function () {
+        if (isPictureInPictureActive()) {
+            if (document.pictureInPictureElement === pictureInPictureVideo
+                    && typeof document.exitPictureInPicture === "function") {
+                document.exitPictureInPicture().catch(function (error) {
+                    showCallStatus("Could not return the call video to the page: " + error.message);
+                });
+            } else if (typeof pictureInPictureVideo.webkitSetPresentationMode === "function") {
+                pictureInPictureVideo.webkitSetPresentationMode("inline");
+            }
+            return;
+        }
+
+        if (!callParticipantId || !supportsPictureInPicture() || !pictureInPictureStream) {
+            showCallStatus(
+                "Picture in Picture is not available in this browser. "
+                + "Try a browser that supports video Picture in Picture."
+            );
+            return;
+        }
+
+        drawPictureInPictureFrame();
+        try {
+            if (typeof pictureInPictureVideo.requestPictureInPicture === "function") {
+                pictureInPictureVideo.requestPictureInPicture()
+                    .then(function () {
+                        pictureInPictureButton.textContent = "Return call video to page";
+                        showCallStatus(
+                            "Call video is in Picture in Picture. "
+                            + "Use the floating window's restore control to return here."
+                        );
+                    })
+                    .catch(function (error) {
+                        showCallStatus("Could not open Picture in Picture: " + error.message);
+                    });
+            } else {
+                pictureInPictureVideo.webkitSetPresentationMode("picture-in-picture");
+                pictureInPictureButton.textContent = "Return call video to page";
+                showCallStatus(
+                    "Call video is in Picture in Picture. "
+                    + "Use the floating window's restore control to return here."
+                );
+            }
+        } catch (error) {
+            showCallStatus("Could not open Picture in Picture: " + error.message);
+        }
     });
     muteCallButton.addEventListener("click", function () {
         if (!callStream) {
@@ -433,6 +643,18 @@
                     showCallStatus("Screen sharing was canceled.");
                 }
             });
+    });
+
+    pictureInPictureVideo.addEventListener("enterpictureinpicture", function () {
+        pictureInPictureButton.textContent = "Return call video to page";
+    });
+    pictureInPictureVideo.addEventListener("leavepictureinpicture", function () {
+        pictureInPictureButton.textContent = "Show call video in Picture in Picture";
+    });
+    pictureInPictureVideo.addEventListener("webkitpresentationmodechanged", function () {
+        pictureInPictureButton.textContent = isPictureInPictureActive()
+            ? "Return call video to page"
+            : "Show call video in Picture in Picture";
     });
 
     /* Add one chat message to the visible conversation. */
@@ -696,6 +918,7 @@
                 showCallStatus("Connected. Join an audio/video call when you're ready.");
             } else if (data.type === "call-joined") {
                 callParticipantId = data.participant_id;
+                preparePictureInPicture();
                 joinCallButton.hidden = true;
                 joinAudioButton.hidden = true;
                 leaveCallButton.hidden = false;

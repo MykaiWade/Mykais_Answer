@@ -19,6 +19,7 @@ class VerificationApiTests(unittest.TestCase):
         root = Path(cls.temp_directory.name)
         cls.database_path = root / "test.db"
         cls.roster_path = root / "verified.txt"
+        cls.questions_path = root / "questions.txt"
         cls.roster_path.write_text(
             "// member roster\n"
             "Erica Concepcion 1 #\n"
@@ -241,6 +242,62 @@ class VerificationApiTests(unittest.TestCase):
         self.assertEqual(contact_login.status_code, 200, contact_login.text)
         self.assertEqual(len(self.other_client.get("/api/contacts").json()["contacts"]), 1)
         self.assertEqual(len(self.client.get("/api/contacts").json()["contacts"]), 1)
+
+    def test_questions_are_appended_and_remain_visible_to_their_author(self):
+        origin = {"Origin": "https://mykaianswer.test"}
+        login = self.client.post(
+            "/api/auth/login",
+            headers=origin,
+            json={
+                "email": "mykai@example.test",
+                "password": "MykaiTestPassword123!",
+            },
+        )
+        self.assertEqual(login.status_code, 200, login.text)
+
+        with patch("server.QUESTIONS_FILE", self.questions_path):
+            submitted = "How do I save a question?"
+            response = self.client.post(
+                "/api/questions",
+                headers=origin,
+                json={"question": submitted},
+            )
+            self.assertEqual(response.status_code, 200, response.text)
+            self.assertIn(submitted + "\n", self.questions_path.read_text(encoding="utf-8"))
+
+            mine = self.client.get("/api/questions/me")
+            self.assertEqual(mine.status_code, 200, mine.text)
+            self.assertTrue(any(
+                question["question"] == submitted
+                for question in mine.json()["questions"]
+            ))
+
+            room_question = "Where can we discuss this?"
+            room = self.client.post(
+                "/api/public-rooms",
+                headers=origin,
+                json={"question": room_question},
+            )
+            self.assertEqual(room.status_code, 200, room.text)
+            self.assertIn(
+                room_question + "\n",
+                self.questions_path.read_text(encoding="utf-8"),
+            )
+
+            failed_question = "This should not be saved."
+            missing_directory = self.questions_path.parent / "missing"
+            with patch("server.QUESTIONS_FILE", missing_directory / "questions.txt"):
+                failed_response = self.client.post(
+                    "/api/questions",
+                    headers=origin,
+                    json={"question": failed_question},
+                )
+            self.assertEqual(failed_response.status_code, 500)
+            mine = self.client.get("/api/questions/me")
+            self.assertFalse(any(
+                question["question"] == failed_question
+                for question in mine.json()["questions"]
+            ))
 
     def test_registration_survives_email_failure_and_account_can_sign_in(self):
         con = self.server.db()

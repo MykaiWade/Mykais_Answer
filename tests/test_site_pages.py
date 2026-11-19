@@ -63,6 +63,16 @@ class SitePageTests(unittest.TestCase):
         self.assertIn("getDisplayMedia", chat_js)
         self.assertIn("replaceTrack", chat_js)
 
+    def test_chat_call_exposes_picture_in_picture_for_participants(self):
+        chat_html = (ROOT / "chat.html").read_text(encoding="utf-8")
+        chat_js = (ROOT / "chat.js").read_text(encoding="utf-8")
+
+        self.assertIn('id="pictureInPictureButton"', chat_html)
+        self.assertIn('id="pictureInPictureVideo"', chat_html)
+        self.assertIn("captureStream(10)", chat_js)
+        self.assertIn("requestPictureInPicture", chat_js)
+        self.assertIn("drawPictureInPictureFrame", chat_js)
+
 
 # Run the tests when this file is started directly.
 if __name__ == "__main__":

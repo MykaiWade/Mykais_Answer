@@ -49,6 +49,7 @@ load_dotenv(Path(HERE) / ".env")
 # Where the database lives. It is created automatically the first time you run the server.
 # CHANGE: rename "chat.db" if you want. If you delete the file, ALL questions and messages are erased.
 DB_FILE = os.environ.get("MYKAIS_DB_FILE", os.path.join(HERE, "chat.db"))
+QUESTIONS_FILE = Path(HERE) / "questions.txt"
 VERIFIED_FILE = Path(
     os.environ.get("MYKAIS_VERIFIED_FILE", Path(HERE) / "verified.txt")
 )
@@ -82,6 +83,18 @@ def db():
     # Lets us read a row by column name (row["text"]) instead of by number (row[2]).
     con.row_factory = sqlite3.Row
     return con
+
+
+def append_question_to_file(question):
+    # Keep each submission on one line so questions.txt remains easy to browse.
+    line = " ".join(question.splitlines()).encode("utf-8") + b"\n"
+    with QUESTIONS_FILE.open("a+b") as question_file:
+        question_file.seek(0, os.SEEK_END)
+        if question_file.tell():
+            question_file.seek(-1, os.SEEK_END)
+            if question_file.read(1) not in (b"\n", b"\r"):
+                question_file.write(b"\n")
+        question_file.write(line)
 
 
 def setup_database():
@@ -1276,6 +1289,17 @@ def add_question(q: NewQuestion, request: Request):
     # Sort best match first.
     matches.sort(key=lambda m: m["score"], reverse=True)
 
+    try:
+        append_question_to_file(question)
+    except OSError as error:
+        con.rollback()
+        con.close()
+        logger.exception("Could not append submitted question to %s", QUESTIONS_FILE)
+        raise HTTPException(
+            status_code=500,
+            detail="Your question could not be saved. Please try again.",
+        ) from error
+
     con.commit()
     con.close()
 
@@ -1303,6 +1327,16 @@ def create_public_room(room: NewPublicRoom, request: Request):
         (profile["user_id"], question, description, time.time(), json.dumps(tags)),
     )
     question_id = cur.lastrowid  # Uses the saved question ID as the room identifier.
+    try:
+        append_question_to_file(question)
+    except OSError as error:
+        con.rollback()
+        con.close()
+        logger.exception("Could not append submitted question to %s", QUESTIONS_FILE)
+        raise HTTPException(
+            status_code=500,
+            detail="Your question could not be saved. Please try again.",
+        ) from error
     con.commit()  # Persists the newly created public room topic.
     con.close()  # Closes the database connection after saving.
     return {"id": question_id, "room": f"question-{question_id}", "question": question}  # Returns the shareable room link data.
