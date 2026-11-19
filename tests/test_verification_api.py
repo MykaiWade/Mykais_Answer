@@ -242,6 +242,75 @@ class VerificationApiTests(unittest.TestCase):
         self.assertEqual(len(self.other_client.get("/api/contacts").json()["contacts"]), 1)
         self.assertEqual(len(self.client.get("/api/contacts").json()["contacts"]), 1)
 
+    def test_registration_survives_email_failure_and_account_can_sign_in(self):
+        con = self.server.db()
+        con.execute("DELETE FROM verification_mail_events")
+        con.commit()
+        con.close()
+
+        origin = {"Origin": "https://mykaianswer.test"}
+        account = {
+            "real_name": "Email Unavailable",
+            "email": "email-unavailable@example.test",
+            "password": "EmailUnavailable123!",
+        }
+        with patch(
+            "server.send_verification_email",
+            side_effect=ValueError("Email delivery is not configured."),
+        ):
+            registration = self.anonymous_client.post(
+                "/api/auth/register",
+                headers=origin,
+                json=account,
+            )
+
+        self.assertEqual(registration.status_code, 200, registration.text)
+        self.assertFalse(registration.json()["verification_email_sent"])
+        self.assertEqual(registration.json()["real_name"], account["real_name"])
+
+        login = self.anonymous_client.post(
+            "/api/auth/login",
+            headers=origin,
+            json={
+                "email": account["email"],
+                "password": account["password"],
+            },
+        )
+        self.assertEqual(login.status_code, 200, login.text)
+        self.assertEqual(login.json()["real_name"], account["real_name"])
+
+    def test_removed_roster_account_is_not_restored_on_startup(self):
+        user_id = "removed-roster-test-id"
+        con = self.server.db()
+        con.execute(
+            "INSERT INTO profiles "
+            "(user_id, real_name, verified, created, email, password_hash, "
+            "account_number) VALUES (?, ?, 1, ?, ?, '', ?)",
+            (user_id, "Removed Duplicate", time.time(), "removed@example.test", 99),
+        )
+        con.commit()
+        con.close()
+
+        try:
+            roster_before = self.roster_path.read_text(encoding="utf-8")
+            self.server.synchronize_verification_roster()
+
+            self.assertEqual(
+                self.roster_path.read_text(encoding="utf-8"),
+                roster_before,
+            )
+            con = self.server.db()
+            profile = con.execute(
+                "SELECT verified FROM profiles WHERE user_id = ?", (user_id,)
+            ).fetchone()
+            con.close()
+            self.assertEqual(profile["verified"], 0)
+        finally:
+            con = self.server.db()
+            con.execute("DELETE FROM profiles WHERE user_id = ?", (user_id,))
+            con.commit()
+            con.close()
+
 
 if __name__ == "__main__":
     unittest.main()

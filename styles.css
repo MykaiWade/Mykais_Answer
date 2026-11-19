@@ -14,7 +14,27 @@
         /* The big heading. Change the color name, or use a hex like #ff6600.
            Keep it dark so it stays readable on the light blue. */
         h1 { color: darkblue; }
- 
+         .center-text {text-align: center;}
+         
+         #welcomeTitle{
+            cursor: pointer;
+            transition: transform 0.2 ease;
+         }
+
+         #welcomeTitle:hover {
+            transform: scale(1.03);
+         }
+
+         .secret-active{
+            animation: secretPop 0.4s ease;
+         }
+
+         @keyframes secretPop {
+            50% {
+               transform: scale(1.15) rotate(-3deg);
+            }
+         }
+      
         /* One row = a label and its box side by side.
            display: flex puts items on one line.
            align-items: flex-start lines them up at the top.

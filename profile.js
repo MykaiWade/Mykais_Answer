@@ -99,6 +99,10 @@
                 showSignedIn();
                 if (data.verification_email_sent) {
                     status.textContent += " A verification QR code was sent to your email.";
+                } else if (data.verification_email_sent === false) {
+                    status.textContent +=
+                        " Your account was created, but the verification email could not be sent. "
+                        + "Check the server email settings, then request another QR code here.";
                 }
                 window.dispatchEvent(new CustomEvent("profilechange", { detail: profile }));
             })

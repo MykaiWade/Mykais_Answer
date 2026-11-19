@@ -10,6 +10,7 @@ import os        # Works with file paths and folders.
 import hashlib   # Hashes passwords and session tokens before saving them.
 import hmac      # Compares password hashes without timing leaks.
 import json      # Stores each question's selected badges in the database.
+import logging
 import re        # "Regular expressions": finds patterns in text (used to split text into words).
 import secrets   # Creates unpredictable profile IDs.
 import smtplib
@@ -38,6 +39,7 @@ from verification import (
 
 # Creates the web app. Every "@app..." line below attaches a feature to it.
 app = FastAPI()
+logger = logging.getLogger(__name__)
 
 # The folder this file is in. Pages and the database are found relative to it.
 # CHANGE: normally leave this alone.
@@ -229,10 +231,7 @@ def synchronize_verification_roster():
             if number is None:
                 continue
             entry = entries.get(number)
-            if entry is None:
-                entries[number] = RosterEntry(number, profile["real_name"], False)
-                roster_changed = True
-            elif entry.name.casefold() != profile["real_name"].casefold():
+            if entry and entry.name.casefold() != profile["real_name"].casefold():
                 raise RuntimeError(
                     f"Roster number {number} does not match its saved account name."
                 )
@@ -520,13 +519,22 @@ def register_account(account: RegisterAccount, request: Request):
             os.environ.get("PUBLIC_BASE_URL", "https://mykaianswer.com").strip(),
             token,
         )
-        send_verification_email(email, real_name, account_number, link)
+        try:
+            send_verification_email(email, real_name, account_number, link)
+            verification_email_sent = True
+        except (OSError, RuntimeError, smtplib.SMTPException, ValueError) as error:
+            logger.warning(
+                "Could not send the verification email for account %s: %s",
+                account_number,
+                error,
+            )
+            verification_email_sent = False
         return finish_login(
             con,
             user_id,
             request,
             "Account created.",
-            {"verification_email_sent": True},
+            {"verification_email_sent": verification_email_sent},
         )
     except sqlite3.IntegrityError:
         con.rollback()
